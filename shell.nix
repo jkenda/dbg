@@ -8,6 +8,8 @@ pkgs.mkShell {
     SDL2
     libcxx
     python311Packages.ply
+
+    tree
   ];
 }
 
