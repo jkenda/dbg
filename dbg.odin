@@ -44,6 +44,11 @@ main :: proc() {
     im.CreateContext()
     defer im.DestroyContext()
 
+    { // load .ini file but strip custom data
+        ini_string, ini_len := read_and_strip_ini_file()
+        im.LoadIniSettingsFromMemory(ini_string, ini_len)
+    }
+
     io := im.GetIO()
     {
         io.ConfigFlags += {
@@ -52,7 +57,7 @@ main :: proc() {
             .ViewportsEnable,
         }
 
-        io.IniFilename = "dbg-layout.ini";
+        io.IniFilename = nil
     }
     {
         style := im.GetStyle()
@@ -111,6 +116,15 @@ main :: proc() {
 
         sdl.GL_SwapWindow(window)
     }
+
+    { // save .ini file with custom data added ()
+        io.WantSaveIniSettings = true
+        ini_len: uint
+        ini_data := im.SaveIniSettingsToMemory(&ini_len)
+        io.WantSaveIniSettings = false
+
+        save_ini_with_extension(ini_data, ini_len)
+    }
 }
 
 ROOT_DOCK_SPACE :: "RootDockSpace"
@@ -141,9 +155,9 @@ show_main_window :: proc() {
                 im.EndMenu()
             }
             if (im.BeginMenu("View")) {
-                im.MenuItemBoolPtr(STR_MEMORY, nil, &show_views.memory)
-                im.MenuItemBoolPtr(STR_WATCH, nil, &show_views.watch)
-                im.MenuItemBoolPtr(STR_DASM, nil, &show_views.dasm)
+                im.MenuItemBoolPtr(STR_MEMORY, nil, &show.view.memory)
+                im.MenuItemBoolPtr(STR_WATCH, nil, &show.view.watch)
+                im.MenuItemBoolPtr(STR_DASM, nil, &show.view.dasm)
 
                 im.EndMenu()
             }
@@ -159,7 +173,7 @@ show_main_window :: proc() {
 
             when ODIN_DEBUG {
                 if (im.BeginMenu("_Debug_")) {
-                    im.MenuItemBoolPtr("Demo Window", nil, &show_views.demo_window)
+                    im.MenuItemBoolPtr("Demo Window", nil, &show.demo_window)
 
                     im.EndMenu()
                 }
@@ -169,22 +183,16 @@ show_main_window :: proc() {
         }
 
         { // show views
-            show_demo_window(&show_views.demo_window)
+            show_demo_window(&show.demo_window)
 
-            show_memory_view(&show_views.memory)
-            show_watch_view(&show_views.watch)
-            show_dasm_view(&show_views.dasm)
+            show_memory_view(&show.view.memory)
+            show_watch_view(&show.view.watch)
+            show_dasm_view(&show.view.dasm)
         }
 
     }
     im.End()
 }
-
-Show_Views :: struct {
-    demo_window: bool,
-    source, dasm, watch, memory: bool,
-}
-show_views: Show_Views
 
 DEMO :: "Demo Window"
 show_demo_window :: proc(show: ^bool) {
@@ -198,6 +206,24 @@ show_memory_view :: proc(show: ^bool) {
     if !show^ { return }
 
     im.Begin(STR_MEMORY, show)
+
+    NUM_COLUMNS :: 8
+    if (im.BeginTable(
+            "table1",
+            NUM_COLUMNS,
+            im.TableFlags_RowBg | im.TableFlags_SizingFixedFit | im.TableFlags_NoHostExtendX,
+            {0, im.GetTextLineHeightWithSpacing() * 6})
+    ) {
+        for row in 0..<10 {
+            im.TableNextRow()
+            for column in 0..<NUM_COLUMNS {
+                im.TableNextColumn()
+                im.Text("00", column, row)
+            }
+        }
+        im.EndTable();
+    }
+
     im.End()
 }
 
