@@ -7,11 +7,24 @@ import "odin-imgui/imgui_impl_opengl3"
 import sdl "vendor:sdl2"
 import gl "vendor:OpenGL"
 
+import "core:strings"
+import "core:fmt"
+import "core:log"
+
+import "views"
+
 APPLICATION_NAME :: "Debugger"
 
 main :: proc() {
+    when ODIN_DEBUG {
+        context.logger = log.create_console_logger(.Debug)
+    }
+
     // prefer Wayland
     sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
+
+    // don't keep the screen from sleeping
+    sdl.EnableScreenSaver()
 
     assert(sdl.Init(sdl.INIT_EVERYTHING) == 0)
     defer sdl.Quit()
@@ -155,9 +168,29 @@ show_main_window :: proc() {
                 im.EndMenu()
             }
             if (im.BeginMenu("View")) {
-                im.MenuItemBoolPtr(STR_MEMORY, nil, &show.view.memory)
-                im.MenuItemBoolPtr(STR_WATCH, nil, &show.view.watch)
-                im.MenuItemBoolPtr(STR_DASM, nil, &show.view.dasm)
+                for view_type in views.View_Type {
+                    type_name := views.View_Names[view_type]
+                    if view_type in views.singletons {
+                        resize(&views.data[view_type], 1)
+                        im.MenuItemBoolPtr(type_name, nil, &views.data[view_type][0].show)
+                    }
+                    else {
+                        if (im.BeginMenu(type_name)) {
+                            for &view in views.data[view_type] {
+                                view_name := strings.unsafe_string_to_cstring(view.name)
+                                im.MenuItemBoolPtr(view_name, nil, &view.show)
+                            }
+
+                            if (im.MenuItem("Add", nil)) {
+                                append(&views.data[view_type], views.View_Data{
+                                    name = fmt.aprintf("{} #{}", type_name, len(views.data[view_type])),
+                                    show = true,
+                                })
+                            }
+                            im.EndMenu()
+                        }
+                    }
+                }
 
                 im.EndMenu()
             }
@@ -173,8 +206,7 @@ show_main_window :: proc() {
 
             when ODIN_DEBUG {
                 if (im.BeginMenu("_Debug_")) {
-                    im.MenuItemBoolPtr("Demo Window", nil, &show.demo_window)
-
+                    im.MenuItemBoolPtr("Demo Window", nil, &show_demo_window)
                     im.EndMenu()
                 }
             }
@@ -183,62 +215,30 @@ show_main_window :: proc() {
         }
 
         { // show views
-            show_demo_window(&show.demo_window)
+            for view_type in views.View_Type {
+                if view_type in views.singletons {
+                    resize(&views.data[view_type], 1)
+                    views.show_view(view_type, &views.data[view_type][0])
+                }
+                else {
+                    for &view_data in views.data[view_type] {
+                        views.show_view(view_type, &view_data)
+                    }
+                }
 
-            show_memory_view(&show.view.memory)
-            show_watch_view(&show.view.watch)
-            show_dasm_view(&show.view.dasm)
-        }
+            }
 
-    }
-    im.End()
-}
-
-DEMO :: "Demo Window"
-show_demo_window :: proc(show: ^bool) {
-    if ODIN_DEBUG && show^ {
-        im.ShowDemoWindow(show)
-    }
-}
-
-STR_MEMORY :: "Memory"
-show_memory_view :: proc(show: ^bool) {
-    if !show^ { return }
-
-    im.Begin(STR_MEMORY, show)
-
-    NUM_COLUMNS :: 8
-    if (im.BeginTable(
-            "table1",
-            NUM_COLUMNS,
-            im.TableFlags_RowBg | im.TableFlags_SizingFixedFit | im.TableFlags_NoHostExtendX,
-            {0, im.GetTextLineHeightWithSpacing() * 6})
-    ) {
-        for row in 0..<10 {
-            im.TableNextRow()
-            for column in 0..<NUM_COLUMNS {
-                im.TableNextColumn()
-                im.Text("00", column, row)
+            when ODIN_DEBUG {
+                if show_demo_window {
+                    im.ShowDemoWindow()
+                }
             }
         }
-        im.EndTable();
+
     }
-
     im.End()
 }
 
-STR_WATCH :: "Watch"
-show_watch_view :: proc(show: ^bool) {
-    if !show^ { return }
-
-    im.Begin(STR_WATCH, show)
-    im.End()
-}
-
-STR_DASM :: "Disassembly"
-show_dasm_view :: proc(show: ^bool) {
-    if !show^ { return }
-
-    im.Begin(STR_DASM, show)
-    im.End()
+when ODIN_DEBUG {
+    show_demo_window: bool
 }

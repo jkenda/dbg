@@ -3,24 +3,17 @@ package dbg
 import "core:strings"
 import "core:bytes"
 import "core:os"
-import "core:c"
 import "core:encoding/json"
+import "core:log"
 
-import "core:fmt"
+import "views"
 
 SAVE_FILE_PATH :: "dbg.layout"
 @(private="file") INI_SEPARATOR :: "-------------"
 
-View :: struct {
-    source, dasm, watch, memory: bool,
-}
-Show :: struct {
-    demo_window: bool,
-    view: View,
-}
-show: Show
+read_and_strip_ini_file :: proc() -> (cstring, uint) {
+    log.info(SAVE_FILE_PATH)
 
-read_and_strip_ini_file :: proc() -> (cstring, c.size_t) {
     bytes, ok := os.read_entire_file(SAVE_FILE_PATH)
     if !ok {
         return "", 0
@@ -42,13 +35,15 @@ read_and_strip_ini_file :: proc() -> (cstring, c.size_t) {
 
 @(private="file")
 deserialize_ini_extension :: proc(extension: string) {
-    err := json.unmarshal_string(extension, &show.view, .MJSON)
-    assert(err == nil)
-
-    fmt.println(show)
+    err := json.unmarshal_string(extension, &views.data, .MJSON)
+    if err != nil {
+        log.warn("Layout format changed: {}", views.data)
+    }
 }
 
-save_ini_with_extension :: proc(ini_cstring: cstring, ini_len: c.size_t) {
+save_ini_with_extension :: proc(ini_cstring: cstring, ini_len: uint) {
+    log.info(SAVE_FILE_PATH)
+
     buffer: bytes.Buffer
 
     ini_string := strings.string_from_null_terminated_ptr(transmute([^]u8)ini_cstring, int(ini_len))
@@ -68,7 +63,7 @@ save_ini_with_extension :: proc(ini_cstring: cstring, ini_len: c.size_t) {
             mjson_keys_use_equal_sign = true,
             use_enum_names = true,
         }
-        data, err := json.marshal(show.view, MARSHAL_OPTIONS)
+        data, err := json.marshal(views.data, MARSHAL_OPTIONS)
         assert(err == nil)
 
         bytes.buffer_write(&buffer, data)
