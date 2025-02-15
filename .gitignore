@@ -1,2 +1,4 @@
 dbg
+*.o
+*.bin
 *.layout
