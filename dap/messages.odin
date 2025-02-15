@@ -77,7 +77,7 @@ Body_Error :: struct {
         format: string,
         url: Maybe(string),
         urlLabel: Maybe(string),
-        variables: map[string]string,
+        //variables: map[string]string,
         sendTelemetry: Maybe(bool),
         showUser: Maybe(bool),
     }

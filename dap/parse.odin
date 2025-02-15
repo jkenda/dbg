@@ -7,6 +7,16 @@ import "core:log"
 import "base:runtime"
 
 
+Error :: union {
+    json.Unmarshal_Error,
+    Parse_Error,
+}
+
+Parse_Error :: enum {
+    Unknown_Message,
+}
+
+
 parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: DAP_Message, err: Error) {
     context.allocator = allocator
 
@@ -25,10 +35,11 @@ parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: 
         return
     }
 
-    log.debug("parsed:", msg, "size:", size_of(msg), "B")
+    //log.debug("parsed:", msg, "size:", size_of(msg), "B")
     return
 }
 
+@(private)
 parse_request :: proc(msg_str: string, base: ProtocolMessage) -> (request: Request, err: Error) {
     request.base = base
     json.unmarshal_string(msg_str, &request) or_return
@@ -45,6 +56,7 @@ parse_request :: proc(msg_str: string, base: ProtocolMessage) -> (request: Reque
     return
 }
 
+@(private)
 parse_response :: proc(msg_str: string, base: ProtocolMessage) -> (response: Response, err: Error) {
     response.base = base
     json.unmarshal_string(msg_str, &response) or_return
@@ -66,22 +78,13 @@ parse_response :: proc(msg_str: string, base: ProtocolMessage) -> (response: Res
     return
 }
 
+@(private)
 parse_event :: proc(msg_str: string, base: ProtocolMessage) -> (event: Event, err: Error) {
     event.base = base
     json.unmarshal_string(msg_str, &event) or_return
 
     err = .Unknown_Message
     return
-}
-
-
-Error :: union {
-    json.Unmarshal_Error,
-    Parse_Error,
-}
-
-Parse_Error :: enum {
-    Unknown_Message,
 }
 
 
@@ -99,7 +102,14 @@ parse_cancel_req :: proc(t: ^testing.T) {
     }`, t._log_allocator)
 
     testing.expect_value(t, err, nil)
-    //testing.expect_value(t, msg, Request{})
+    testing.expect_value(t, msg.(Request), Request{
+        seq = 3,
+        type = .request,
+        command = .cancel,
+        arguments = Arguments_Cancel{
+            requestId = 2
+        }
+    })
 }
 
 @(test)
@@ -113,7 +123,14 @@ parse_cancel_res :: proc(t: ^testing.T) {
     }`, t._log_allocator)
 
     testing.expect_value(t, err, nil)
-    //testing.expect_value(t, msg, Request{})
+    testing.expect_value(t, msg.(Response), Response{
+        seq = 4,
+        type = .response,
+        request_seq = 3,
+        command = .cancel,
+        success = true,
+        body = Empty{}
+    })
 }
 
 @(test)
@@ -141,5 +158,26 @@ parse_error_res :: proc(t: ^testing.T) {
     }`, t._log_allocator)
 
     testing.expect_value(t, err, nil)
-    //testing.expect_value(t, msg, Request{})
+    assert(Response{} == Response{})
+    testing.expect_value(t, msg.(Response), Response{
+        seq = 5,
+        type = .response,
+        request_seq = 3,
+        command = .cancel,
+        success = false,
+        //message = "Request cannot be canceled",
+        body = Body_Error{
+            error = {
+                id = 1,
+                format = "The request with ID 2 is not cancellable.",
+                //variables = {
+                //    ["requestId"] = "2"
+                //},
+                sendTelemetry = false,
+                showUser = true,
+                url = "https://example.com/debugger-errors#request-not-cancellable",
+                urlLabel = "More Information"
+            }
+        }
+    })
 }
