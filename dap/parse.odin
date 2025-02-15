@@ -8,8 +8,8 @@ import "base:runtime"
 
 
 Error :: union {
-    json.Unmarshal_Error,
     Parse_Error,
+    json.Unmarshal_Error,
 }
 
 Parse_Error :: enum {
@@ -23,7 +23,7 @@ parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: 
     message: ProtocolMessage
     json.unmarshal_string(msg_str, &message) or_return
 
-    #partial switch message.type {
+    switch message.type {
     case .request:
         msg = parse_request(msg_str, message) or_return
     case .response:
@@ -83,7 +83,15 @@ parse_event :: proc(msg_str: string, base: ProtocolMessage) -> (event: Event, er
     event.base = base
     json.unmarshal_string(msg_str, &event) or_return
 
-    err = .Unknown_Message
+    switch event.event {
+    case .output:
+        event.body = Body_OutputEvent{}
+    case nil:
+        err = .Unknown_Message
+        return
+    }
+
+    json.unmarshal_string(msg_str, &event) or_return
     return
 }
 
@@ -178,6 +186,30 @@ parse_error_res :: proc(t: ^testing.T) {
                 url = "https://example.com/debugger-errors#request-not-cancellable",
                 urlLabel = "More Information"
             }
+        }
+    })
+}
+
+@(test)
+parse_output_evt :: proc(t: ^testing.T) {
+    msg, err := parse_message(`{
+        "type": "event",
+        "event": "output",
+        "body": {
+            "category": "stdout",
+            "output": "GNU gdb (GDB) 14.2\n"
+        },
+        "seq": 1
+    }`, t._log_allocator)
+
+    testing.expect_value(t, err, nil)
+    testing.expect_value(t, msg.(Event), Event{
+        seq = 1,
+        type = .event,
+        event = .output,
+        body = Body_OutputEvent{
+            category = .stdout,
+            output = "GNU gdb (GDB) 14.2\n"
         }
     })
 }

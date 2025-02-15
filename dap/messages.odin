@@ -93,14 +93,12 @@ Empty :: struct {}
 Event :: struct #packed {
     using base: ProtocolMessage,
 
-    event: EventType,
+    event: enum u8 {
+        output,
+    },
     body: union {
         Body_OutputEvent,
     },
-}
-
-EventType :: enum u8 {
-    output,
 }
 
 Body_OutputEvent :: struct #packed {
@@ -111,7 +109,7 @@ Body_OutputEvent :: struct #packed {
     source: Maybe(Source),
     line: Maybe(number),
     column: Maybe(number),
-    data: any,
+    //data: any,
     locationReference: Maybe(number),
 }
 
@@ -124,11 +122,11 @@ Source :: struct #packed {
     name: Maybe(string),
     path: Maybe(string),
     sourceReference: Maybe(number),
-    presentationHint: Maybe(enum u8 {normal, emphasize, deemphasize }),
+    presentationHint: Maybe(enum u8 { normal, emphasize, deemphasize }),
     origin: Maybe(string),
-    sources: Maybe([]Source),
-    adapterData: Maybe(any),
-    checksums: Maybe([]Checksum),
+    //sources: Maybe([]Source),
+    //adapterData: Maybe(any),
+    //checksums: Maybe([]Checksum),
 }
 
 Checksum :: struct #packed {
