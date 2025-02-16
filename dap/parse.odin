@@ -17,81 +17,98 @@ Parse_Error :: enum {
 }
 
 
-parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: DAP_Message, err: Error) {
+parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: Protocol_Message, err: Error) {
     context.allocator = allocator
 
-    message: ProtocolMessage
-    json.unmarshal_string(msg_str, &message) or_return
+    base: struct {
+        seq: number,
+        type: MessageType,
+    }
+    json.unmarshal_string(msg_str, &base) or_return
 
-    switch message.type {
+    switch base.type {
     case .request:
-        msg = parse_request(msg_str, message) or_return
+        msg = parse_request(msg_str) or_return
     case .response:
-        msg = parse_response(msg_str, message) or_return
+        msg = parse_response(msg_str) or_return
     case .event:
-        msg = parse_event(msg_str, message) or_return
+        msg = parse_event(msg_str) or_return
     case nil:
         err = .Unknown_Message
         return
     }
 
-    //log.debug("parsed:", msg, "size:", size_of(msg), "B")
     return
 }
 
 @(private)
-parse_request :: proc(msg_str: string, base: ProtocolMessage) -> (request: Request, err: Error) {
-    request.base = base
+parse_request :: proc(msg_str: string) -> (request: Request, err: Error) {
     json.unmarshal_string(msg_str, &request) or_return
 
     switch request.command {
     case .cancel:
-        request.arguments = Arguments_Cancel{}
+        request.arguments = parse_arguments(Arguments_Cancel, msg_str) or_return
+    case .disconnect:
+        request.arguments = parse_arguments(Arguments_Disconnect, msg_str) or_return
+    case .terminate:
+        request.arguments = parse_arguments(Arguments_Terminate, msg_str) or_return
     case nil:
         err = .Unknown_Message
-        return
     }
 
-    json.unmarshal_string(msg_str, &request) or_return
     return
 }
 
 @(private)
-parse_response :: proc(msg_str: string, base: ProtocolMessage) -> (response: Response, err: Error) {
-    response.base = base
+parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
     json.unmarshal_string(msg_str, &response) or_return
 
     if response.success {
         switch response.command {
-        case .cancel:
+        case .cancel, .disconnect, .terminate:
             response.body = Empty{}
         case nil:
             err = .Unknown_Message
-            return
         }
     }
     else {
-        response.body = Body_Error{}
+        response.body = parse_body(Body_Error, msg_str) or_return
     }
 
-    json.unmarshal_string(msg_str, &response) or_return
     return
 }
 
 @(private)
-parse_event :: proc(msg_str: string, base: ProtocolMessage) -> (event: Event, err: Error) {
-    event.base = base
+parse_event :: proc(msg_str: string) -> (event: Event, err: Error) {
     json.unmarshal_string(msg_str, &event) or_return
 
     switch event.event {
     case .output:
-        event.body = Body_OutputEvent{}
+        event.body = parse_body(Body_OutputEvent, msg_str) or_return
     case nil:
         err = .Unknown_Message
-        return
     }
 
-    json.unmarshal_string(msg_str, &event) or_return
+    return
+}
+
+@(private)
+parse_arguments :: proc($T: typeid, msg_str: string) -> (arguments: T, er: Error) {
+    Arguments_Only :: struct { arguments: T }
+
+    only: Arguments_Only
+    json.unmarshal_string(msg_str, &only) or_return
+    arguments = only.arguments
+    return
+}
+
+@(private)
+parse_body :: proc($T: typeid, msg_str: string) -> (body: T, er: Error) {
+    Body_Only :: struct { body: T }
+
+    only: Body_Only
+    json.unmarshal_string(msg_str, &only) or_return
+    body = only.body
     return
 }
 
@@ -116,6 +133,28 @@ parse_cancel_req :: proc(t: ^testing.T) {
         command = .cancel,
         arguments = Arguments_Cancel{
             requestId = 2
+        }
+    })
+}
+
+@(test)
+parse_terminate_req :: proc(t: ^testing.T) {
+    msg, err := parse_message(`{
+        "seq": 6,
+        "type": "request",
+        "command": "terminate",
+        "arguments": {
+            "restart": false
+        }
+    }`, t._log_allocator)
+
+    testing.expect_value(t, err, nil)
+    testing.expect_value(t, msg.(Request), Request{
+        seq = 6,
+        type = .request,
+        command = .terminate,
+        arguments = Arguments_Terminate{
+            restart = false
         }
     })
 }
@@ -187,6 +226,27 @@ parse_error_res :: proc(t: ^testing.T) {
                 urlLabel = "More Information"
             }
         }
+    })
+}
+
+@(test)
+parse_terminate_res :: proc(t: ^testing.T) {
+    msg, err := parse_message(`{
+        "seq": 4,
+        "type": "response",
+        "request_seq": 3,
+        "command": "terminate",
+        "success": true
+    }`, t._log_allocator)
+
+    testing.expect_value(t, err, nil)
+    testing.expect_value(t, msg.(Response), Response{
+        seq = 4,
+        type = .response,
+        request_seq = 3,
+        command = .terminate,
+        success = true,
+        body = Empty{}
     })
 }
 
