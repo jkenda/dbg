@@ -12,12 +12,16 @@ import "core:fmt"
 import "core:log"
 
 import "views"
+import "dap"
 
 APPLICATION_NAME :: "Debugger"
 
 main :: proc() {
     when ODIN_DEBUG {
         context.logger = log.create_console_logger(.Debug)
+    }
+    else {
+        context.logger = log.create_console_logger(.Info)
     }
 
     // prefer Wayland
@@ -88,14 +92,50 @@ main :: proc() {
     imgui_impl_opengl3.Init(nil)
     defer imgui_impl_opengl3.Shutdown()
 
+    views.init_data()
+    defer views.delete_data()
+
+    // start DAP connection
+    dap_connection, err := dap.connect()
+    assert(err == nil)
+    defer dap.disconnect(&dap_connection)
+
     running := true
     for running {
-        e: sdl.Event
-        for sdl.PollEvent(&e) {
-            imgui_impl_sdl2.ProcessEvent(&e)
+        { // handle DAP messages
+            for {
+                msg, err := dap.read_message(&dap_connection.(dap.Connection_Stdio))
+                if err == .Empty_Input do break
 
-            #partial switch e.type {
-            case .QUIT: running = false
+                switch err {
+                case nil:
+                    switch m in msg {
+                    case dap.Request:
+                        log.warn("unexpected - got request:", m)
+                    case dap.Response:
+                        // no responses as of yet
+                    case dap.Event:
+                        switch m.event {
+                        case .output:
+                            append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
+                        case:
+                            log.warn("event handling not implemented:", m)
+                        }
+                    }
+                case:
+                    log.error(err)
+                }
+            }
+        }
+
+        { // handle SDL events
+            e: sdl.Event
+            for sdl.PollEvent(&e) {
+                imgui_impl_sdl2.ProcessEvent(&e)
+
+                #partial switch e.type {
+                case .QUIT: running = false
+                }
             }
         }
 

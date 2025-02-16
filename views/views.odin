@@ -4,6 +4,7 @@ import im "../odin-imgui"
 import "core:strings"
 
 View_Type :: enum {
+    Output,
     Source,
     Watch,
     Memory,
@@ -11,6 +12,7 @@ View_Type :: enum {
 }
 
 View_Names: [View_Type]cstring = {
+    .Output      = "Output",
     .Source      = "Source",
     .Watch       = "Watch",
     .Memory      = "Memory",
@@ -18,6 +20,7 @@ View_Names: [View_Type]cstring = {
 }
 
 view_show_proc: [View_Type]proc(View_Data) = {
+    .Output      = show_output_view,
     .Source      = show_source_view,
     .Watch       = show_watch_view,
     .Memory      = show_memory_view,
@@ -29,8 +32,20 @@ View_Data :: struct {
     show: bool,
 }
 
-singletons: bit_set[View_Type] = {.Disassembly}
+runtime_data: struct {
+    output: [dynamic]u8
+}
+
+singletons: bit_set[View_Type] = { .Output, .Disassembly }
 data: [View_Type][dynamic]View_Data
+
+init_data :: proc() {
+    reserve(&runtime_data.output, 0x1000)
+}
+
+delete_data :: proc() {
+    delete(runtime_data.output)
+}
 
 show_view :: proc(view_type: View_Type, view_data: ^View_Data) {
     if !view_data.show { return }

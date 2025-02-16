@@ -7,22 +7,12 @@ import "core:log"
 import "base:runtime"
 
 
-Error :: union {
-    Parse_Error,
-    json.Unmarshal_Error,
-}
-
-Parse_Error :: enum {
-    Unknown_Message,
-}
-
-
 parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: Protocol_Message, err: Error) {
     context.allocator = allocator
 
     base: struct {
         seq: number,
-        type: MessageType,
+        type: Message_Type,
     }
     json.unmarshal_string(msg_str, &base) or_return
 

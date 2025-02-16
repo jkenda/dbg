@@ -1,12 +1,13 @@
-package connection
+package dap
 
 import "core:os/os2"
 import "core:encoding/json"
-import "core:net"
-import "core:io"
-import "core:fmt"
 import "core:strconv"
 import "core:strings"
+import "core:net"
+import "core:fmt"
+import "core:log"
+import "core:io"
 
 import "../dap"
 
@@ -20,19 +21,13 @@ Connection_Stdio :: struct {
     process: os2.Process,
     stdin, stdout: ^os2.File,
     buf: [dynamic]u8,
-    seq: dap.number,
+    seq: number,
 }
 
 Connection_Socket :: struct {
     socket: net.TCP_Socket,
     buf: [dynamic]u8,
-    seq: dap.number,
-}
-
-Error :: union #shared_nil {
-    os2.Error,
-    net.Network_Error,
-    dap.Error,
+    seq: number,
 }
 
 GDB             :: "gdb"
@@ -40,10 +35,11 @@ DAP             :: "--interpreter=dap"
 CONTENT_LENGTH  :: "Content-Length: "
 
 
-start_stdio :: proc() -> (conn: Connection, err: Error) {
-    r_in , w_in := os2.pipe() or_return
-    r_out, w_out  := os2.pipe() or_return
+connect_stdio :: proc() -> (conn: Connection, err: Error) {
+    r_in , w_in  := os2.pipe() or_return
+    r_out, w_out := os2.pipe() or_return
 
+    log.info("starting GDB:", GDB, DAP)
     process := os2.process_start(os2.Process_Desc{
         command = { GDB, DAP },
         stdin = r_in,
@@ -51,6 +47,7 @@ start_stdio :: proc() -> (conn: Connection, err: Error) {
     }) or_return
     os2.close(r_in)
     os2.close(w_out)
+    log.info("started")
 
     conn = Connection_Stdio{
         process = process,
@@ -60,82 +57,99 @@ start_stdio :: proc() -> (conn: Connection, err: Error) {
     return
 }
 
-start_TCP :: proc(port: int) -> (conn: Connection, err: Error) {
+connect_TCP :: proc(port: int) -> (conn: Connection, err: Error) {
     socket := net.dial_tcp(net.IP4_Address{ 127, 0, 0, 1 }, port) or_return
     conn = Connection_Socket{ socket = socket }
 
     return
 }
 
-start :: proc{
-    start_stdio,
-    start_TCP,
+connect :: proc{
+    connect_stdio,
+    connect_TCP,
 }
 
-stop :: proc(conn: ^Connection_Stdio, allocator := context.allocator) -> bool {
-    log.debug("requesting disconnect")
-    msg: dap.Protocol_Message = dap.Request{
+disconnect :: proc(conn: ^Connection, allocator := context.allocator) -> bool {
+    switch &c in conn {
+    case Connection_Stdio:
+        return disconnect_stdio(&c, allocator)
+    case Connection_Socket:
+        log.error("not yet implemented")
+        return false
+    }
+
+    return false
+}
+
+disconnect_stdio :: proc(conn: ^Connection_Stdio, allocator := context.allocator) -> bool {
+    log.info("shutting down debug adapter")
+    msg: Protocol_Message = Request{
         type = .request,
         command = .disconnect,
-        arguments = dap.Arguments_Disconnect{},
+        arguments = Arguments_Disconnect{},
     }
     write_message(conn, &msg)
     disconnect_request_seq := conn.seq
 
-    log.debug("waiting for response")
+    log.info("waiting for shutdown")
 
     ok := true
-    response: dap.Protocol_Message
-    waiting: for {
+    response: Protocol_Message
+    wait_response: for {
         msg, err := read_message(conn, true, allocator)
         if err != nil { 
             ok = false
             log.error(err)
-            break waiting
+            break wait_response
         }
 
         switch m in msg {
-        case dap.Response:
+        case Response:
             if m.request_seq == disconnect_request_seq {
                 ok = m.success
                 response = msg
-                break waiting
+                break wait_response
             }
-        case dap.Request, dap.Event:
+        case Request, Event:
             // ignore
         }
     }
+
+    wait_process: if ok {
+        state, err := os2.process_wait(conn.process)
+        if err != nil {
+            ok = false
+            break wait_process
+        }
+        log.info("shutdown successful")
+    }
+
+    os2.close(conn.stdin)
+    os2.close(conn.stdout)
 
     if !ok {
         log.warn("unexpected message:", response, "; killing process")
         assert(os2.process_kill(conn.process) != nil)
     }
-
-    {
-        log.debug("waiting for shutdown")
-        state, err := os2.process_wait(conn.process)
-        assert(state.exited)
-    }
-
     return ok
 }
 
-read_message :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.allocator) -> (msg: dap.Protocol_Message, err: Error) {
+read_message :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.allocator) -> (msg: Protocol_Message, err: Error) {
     str: string
 
     str = read_text(conn, sync, allocator) or_return
-    msg = dap.parse_message(str, allocator) or_return
+    msg = parse_message(str, allocator) or_return
     return
 }
 
-write_message :: proc(conn: ^Connection_Stdio, msg: ^dap.Protocol_Message) -> (err: json.Marshal_Error) {
-    set_seq :: proc(msg: ^dap.Protocol_Message, seq: dap.number) {
+write_message :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (err: json.Marshal_Error) {
+    set_seq :: proc(msg: ^Protocol_Message, seq: number) {
         switch &m in msg {
-        case dap.Request:
+        case Request:
             m.seq = seq
-        case dap.Response:
+        case Response:
             m.seq = seq
-        case dap.Event:
+        case Event:
             m.seq = seq
         }
     }
@@ -150,9 +164,12 @@ write_message :: proc(conn: ^Connection_Stdio, msg: ^dap.Protocol_Message) -> (e
 }
 
 @(private)
-read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.allocator) -> (str: string, err: os2.Error) {
-    if !sync && (os2.pipe_has_data(conn.stdout) or_return) {
-        return
+read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.allocator) -> (str: string, err: Error) {
+    if !sync {
+        if !(os2.pipe_has_data(conn.stdout) or_return) {
+            err = .Empty_Input
+            return
+        }
     }
 
     // read "Content-Length: " and ensure its validity
@@ -187,22 +204,24 @@ read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.a
 
 @(private)
 write_text :: proc(conn: Connection_Stdio, text: string) {
-    fmt.wprint(conn.stdin.stream, CONTENT_LENGTH)
-    fmt.wprint(conn.stdin.stream, len(text))
-    fmt.wprint(conn.stdin.stream, "\r\n\r\n")
-    fmt.wprint(conn.stdin.stream, text)
+    len_buf: [256]u8
+    content_length := strconv.itoa(len_buf[:], len(text))
+
+    io.write_string(conn.stdin.stream, CONTENT_LENGTH)
+    io.write_string(conn.stdin.stream, content_length)
+    io.write_string(conn.stdin.stream, "\r\n\r\n")
+    io.write_string(conn.stdin.stream, text)
 }
 
 
 import "core:testing"
-import "core:log"
 
 @(test)
 test_read_message_stdio :: proc(t: ^testing.T) {
-    conn, err_start := start_stdio()
+    conn, err_start := connect_stdio()
     assert(err_start == nil)
 
     conn_stdio := conn.(Connection_Stdio)
-    ok := stop(&conn_stdio, t._log_allocator)
+    ok := disconnect(&conn, t._log_allocator)
     testing.expect(t, ok)
 }

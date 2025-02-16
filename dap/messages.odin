@@ -13,7 +13,7 @@ Protocol_Message :: union {
     Event,
 }
 
-MessageType :: enum u8 {
+Message_Type :: enum u8 {
     request,
     response,
     event,
@@ -32,7 +32,7 @@ Command :: enum u8 {
 
 Request :: struct #packed {
     seq: number,
-    type: MessageType,
+    type: Message_Type,
 
     command: Command,
     arguments: Arguments,
@@ -65,7 +65,7 @@ Arguments_Terminate :: struct #packed {
 
 Response :: struct #packed {
     seq: number,
-    type: MessageType,
+    type: Message_Type,
 
     request_seq: number,
     success: bool,
@@ -100,15 +100,13 @@ Empty :: struct {}
    Events.
 */
 
-EventType :: enum u8 {
-    output,
-}
-
 Event :: struct #packed {
     seq: number,
-    type: MessageType,
+    type: Message_Type,
 
-    event: EventType,
+    event: enum u8 {
+        output,
+    },
     body: union {
         Body_OutputEvent,
     },
