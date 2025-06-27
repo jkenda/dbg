@@ -25,12 +25,14 @@ main :: proc() {
     }
 
     // prefer Wayland
-    sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
+    if sdl.GetPlatform() == "Linux" {
+        sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
+    }
 
     // don't keep the screen from sleeping
     sdl.EnableScreenSaver()
 
-    assert(sdl.Init(sdl.INIT_EVERYTHING) == 0)
+    assert(sdl.Init(sdl.INIT_EVERYTHING) == 0, strings.clone_from(sdl.GetError()))
     defer sdl.Quit()
 
     sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLcontextFlag.FORWARD_COMPATIBLE_FLAG))
@@ -44,7 +46,7 @@ main :: proc() {
         sdl.WINDOWPOS_CENTERED,
         960, 720,
         {.OPENGL, .RESIZABLE, .ALLOW_HIGHDPI})
-    assert(window != nil)
+    assert(window != nil, strings.clone_from(sdl.GetError()))
     defer sdl.DestroyWindow(window)
 
     gl_ctx := sdl.GL_CreateContext(window)
@@ -97,7 +99,7 @@ main :: proc() {
 
     // start DAP connection
     dap_connection, err := dap.connect()
-    assert(err == nil)
+    assert(err == nil, strings.clone_from(sdl.GetError()))
     defer dap.disconnect(&dap_connection)
 
     running := true
@@ -146,7 +148,7 @@ main :: proc() {
         }
 
         { // show main window
-            show_main_window()
+            show_main_window(window)
         }
 
         { // Render
@@ -181,8 +183,11 @@ main :: proc() {
 }
 
 ROOT_DOCK_SPACE :: "RootDockSpace"
-show_main_window :: proc() {
-    im.SetNextWindowPos({0, 0})
+show_main_window :: proc(window: ^sdl.Window) {
+    x, y: i32
+    sdl.GetWindowPosition(window, &x, &y)
+
+    im.SetNextWindowPos({f32(x), f32(y)})
     im.SetNextWindowSize(im.GetIO().DisplaySize)
     im.Begin(ROOT_DOCK_SPACE, nil, {
         .NoTitleBar,
@@ -197,7 +202,7 @@ show_main_window :: proc() {
         .MenuBar,
     })
     dockspace_ID := im.GetID(ROOT_DOCK_SPACE)
-    im.DockSpace(dockspace_ID, {0, 0}, nil)
+    im.DockSpace(dockspace_ID)
 
     { // MenuBar
         if (im.BeginMenuBar()) {
