@@ -38,6 +38,8 @@ parse_request :: proc(msg_str: string) -> (request: Request, err: Error) {
     switch request.command {
     case .cancel:
         request.arguments = parse_arguments(Arguments_Cancel, msg_str) or_return
+    case .initialize:
+        request.arguments = parse_arguments(Arguments_Initialize, msg_str) or_return
     case .disconnect:
         request.arguments = parse_arguments(Arguments_Disconnect, msg_str) or_return
     case .terminate:
@@ -56,7 +58,9 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
     if response.success {
         switch response.command {
         case .cancel, .disconnect, .terminate:
-            response.body = Empty{}
+            response.body = Body_Empty{}
+        case .initialize:
+            response.body = parse_body(Body_Initialized, msg_str) or_return
         case nil:
             err = .Unknown_Message
         }
@@ -166,7 +170,7 @@ parse_cancel_res :: proc(t: ^testing.T) {
         request_seq = 3,
         command = .cancel,
         success = true,
-        body = Empty{}
+        body = Body_Empty{}
     })
 }
 
@@ -236,7 +240,7 @@ parse_terminate_res :: proc(t: ^testing.T) {
         request_seq = 3,
         command = .terminate,
         success = true,
-        body = Empty{}
+        body = Body_Empty{}
     })
 }
 

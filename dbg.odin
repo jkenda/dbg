@@ -24,122 +24,28 @@ main :: proc() {
         context.logger = log.create_console_logger(.Info)
     }
 
-    // prefer Wayland
-    if sdl.GetPlatform() == "Linux" {
-        sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
-    }
-
-    // don't keep the screen from sleeping
-    sdl.EnableScreenSaver()
-
-    assert(sdl.Init(sdl.INIT_EVERYTHING) == 0, strings.clone_from(sdl.GetError()))
+    window := init_SDL()
     defer sdl.Quit()
-
-    sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLcontextFlag.FORWARD_COMPATIBLE_FLAG))
-    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, i32(sdl.GLprofile.CORE))
-    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 3)
-    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 2)
-
-    window := sdl.CreateWindow(
-        APPLICATION_NAME,
-        sdl.WINDOWPOS_CENTERED,
-        sdl.WINDOWPOS_CENTERED,
-        960, 720,
-        {.OPENGL, .RESIZABLE, .ALLOW_HIGHDPI})
-    assert(window != nil, strings.clone_from(sdl.GetError()))
     defer sdl.DestroyWindow(window)
 
-    gl_ctx := sdl.GL_CreateContext(window)
+    gl_ctx := init_openGL(window)
     defer sdl.GL_DeleteContext(gl_ctx)
 
-    sdl.GL_MakeCurrent(window, gl_ctx)
-    sdl.GL_SetSwapInterval(1) // vsync
-
-    gl.load_up_to(3, 2, proc(p: rawptr, name: cstring) {
-        (cast(^rawptr)p)^ = sdl.GL_GetProcAddress(name)
-    })
-
-    im.CHECKVERSION()
-    im.CreateContext()
+    io := init_ImGui(window, gl_ctx)
     defer im.DestroyContext()
-
-    { // load .ini file but strip custom data
-        ini_string, ini_len := read_and_strip_ini_file()
-        im.LoadIniSettingsFromMemory(ini_string, ini_len)
-    }
-
-    io := im.GetIO()
-    {
-        io.ConfigFlags += {
-            .NavEnableKeyboard,
-            .DockingEnable,
-            .ViewportsEnable,
-        }
-
-        io.IniFilename = nil
-    }
-    {
-        style := im.GetStyle()
-        style.WindowRounding = 0
-        style.Colors[im.Col.WindowBg].w = 1
-        style.FrameBorderSize = 1
-    }
-
-    im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/NotoSans-Regular.ttf", 18)
-
-    im.StyleColorsClassic()
-
-    imgui_impl_sdl2.InitForOpenGL(window, gl_ctx)
     defer imgui_impl_sdl2.Shutdown()
-    imgui_impl_opengl3.Init(nil)
     defer imgui_impl_opengl3.Shutdown()
 
     views.init_data()
     defer views.delete_data()
 
-    // start DAP connection
-    dap_connection, err := dap.connect()
-    assert(err == nil, strings.clone_from(sdl.GetError()))
+    dap_connection := init_debugger()
     defer dap.disconnect(&dap_connection)
 
     running := true
     for running {
-        { // handle DAP messages
-            for {
-                msg, err := dap.read_message(&dap_connection.(dap.Connection_Stdio))
-                if err == .Empty_Input do break
-
-                switch err {
-                case nil:
-                    switch m in msg {
-                    case dap.Request:
-                        log.warn("unexpected - got request:", m)
-                    case dap.Response:
-                        // no responses as of yet
-                    case dap.Event:
-                        switch m.event {
-                        case .output:
-                            append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
-                        case:
-                            log.warn("event handling not implemented:", m)
-                        }
-                    }
-                case:
-                    log.error(err)
-                }
-            }
-        }
-
-        { // handle SDL events
-            e: sdl.Event
-            for sdl.PollEvent(&e) {
-                imgui_impl_sdl2.ProcessEvent(&e)
-
-                #partial switch e.type {
-                case .QUIT: running = false
-                }
-            }
-        }
+        handle_DAP_events(&dap_connection)
+        handle_SDL_events(&running)
 
         { // NewFrame
             imgui_impl_opengl3.NewFrame()
@@ -179,6 +85,158 @@ main :: proc() {
         io.WantSaveIniSettings = false
 
         save_ini_with_extension(ini_data, ini_len)
+    }
+}
+
+init_debugger :: proc() -> dap.Connection {
+    // start DAP connection
+    conn, err := dap.connect()
+    assert(err == nil, strings.clone_from(sdl.GetError()))
+
+    { // initialize debugger
+        req : dap.Protocol_Message = dap.Request{
+            type = .request,
+            command = .initialize,
+            arguments = dap.Arguments_Initialize{
+                clientID = "dbg",
+                adapterID = "gdb",
+                linesStartAt1 = true,
+                columnsStartAt1 = true,
+            }
+        }
+        dap.write_message(&conn.(dap.Connection_Stdio), &req)
+
+        // wait for 'initialized' response
+        for !debugger_initialized {
+            handle_DAP_events(&conn)
+        }
+
+        log.info("debugger initialized")
+    }
+
+    return conn
+}
+
+init_SDL :: proc() -> ^sdl.Window {
+    // prefer Wayland
+    if sdl.GetPlatform() == "Linux" {
+        sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
+    }
+
+    // don't keep the screen from sleeping
+    sdl.EnableScreenSaver()
+
+    assert(sdl.Init(sdl.INIT_EVERYTHING) == 0, strings.clone_from(sdl.GetError()))
+
+    sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLcontextFlag.FORWARD_COMPATIBLE_FLAG))
+    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, i32(sdl.GLprofile.CORE))
+    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 3)
+    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 2)
+
+    window := sdl.CreateWindow(
+        APPLICATION_NAME,
+        sdl.WINDOWPOS_CENTERED,
+        sdl.WINDOWPOS_CENTERED,
+        960, 720,
+        {.OPENGL, .RESIZABLE, .ALLOW_HIGHDPI})
+    assert(window != nil, strings.clone_from(sdl.GetError()))
+
+    return window
+}
+
+init_openGL :: proc(window: ^sdl.Window) -> sdl.GLContext {
+    gl_ctx := sdl.GL_CreateContext(window)
+    gl.load_up_to(3, 2, proc(p: rawptr, name: cstring) {
+        (cast(^rawptr)p)^ = sdl.GL_GetProcAddress(name)
+    })
+
+    sdl.GL_MakeCurrent(window, gl_ctx)
+    sdl.GL_SetSwapInterval(1) // vsync
+
+    return gl_ctx
+}
+
+init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
+    im.CHECKVERSION()
+    im.CreateContext()
+
+    { // load .ini file but strip custom data
+        ini_string, ini_len := read_and_strip_ini_file()
+        im.LoadIniSettingsFromMemory(ini_string, ini_len)
+    }
+
+    io := im.GetIO()
+    {
+        io.ConfigFlags += {
+            .NavEnableKeyboard,
+            .DockingEnable,
+            .ViewportsEnable,
+        }
+
+        io.IniFilename = nil
+    }
+    {
+        style := im.GetStyle()
+        style.WindowRounding = 0
+        style.Colors[im.Col.WindowBg].w = 1
+        style.FrameBorderSize = 1
+    }
+
+    im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/NotoSans-Regular.ttf", 18)
+
+    im.StyleColorsClassic()
+
+    imgui_impl_sdl2.InitForOpenGL(window, gl_ctx)
+    imgui_impl_opengl3.Init(nil)
+
+    return io
+}
+
+handle_DAP_events :: proc(connection: ^dap.Connection) {
+    for {
+        msg, err := dap.read_message(&connection.(dap.Connection_Stdio), allocator = context.temp_allocator)
+        if err == .Empty_Input do break
+
+        switch err {
+        case nil:
+            switch m in msg {
+            case dap.Request:
+                log.warn("unexpected - got request:", m)
+            case dap.Response:
+                switch m.command {
+                case .cancel, .disconnect, .terminate:
+                    unreachable()
+                case .initialize:
+                    debugger_capabilities = m.body.(dap.Body_Initialized)
+                    debugger_initialized = true
+                case:
+                    log.warn("response handling not implemented:", m)
+                }
+            case dap.Event:
+                switch m.event {
+                case .output:
+                    log.debug("output:", strings.trim_space(m.body.(dap.Body_OutputEvent).output))
+                    append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
+                case:
+                    log.warn("event handling not implemented:", m)
+                }
+            }
+        case:
+            log.error(err)
+        }
+    }
+
+    free_all(context.temp_allocator)
+}
+
+handle_SDL_events :: proc(running: ^bool) {
+    e: sdl.Event
+    for sdl.PollEvent(&e) {
+        imgui_impl_sdl2.ProcessEvent(&e)
+
+        #partial switch e.type {
+        case .QUIT: running^ = false
+        }
     }
 }
 
@@ -283,6 +341,9 @@ show_main_window :: proc(window: ^sdl.Window) {
     }
     im.End()
 }
+
+debugger_capabilities: dap.Capabilities
+debugger_initialized := false
 
 when ODIN_DEBUG {
     show_demo_window: bool

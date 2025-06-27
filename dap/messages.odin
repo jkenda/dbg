@@ -21,6 +21,7 @@ Message_Type :: enum u8 {
 
 Command :: enum u8 {
     cancel,
+    initialize,
     disconnect,
     terminate,
 }
@@ -40,6 +41,7 @@ Request :: struct #packed {
 
 Arguments :: union {
     Arguments_Cancel,
+    Arguments_Initialize,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -47,6 +49,26 @@ Arguments :: union {
 Arguments_Cancel :: struct #packed {
     requestId: Maybe(number) `json:"requestId,omitempty"`,
     progressId: Maybe(string) `json:"progressId, omitempty"`,
+}
+
+Arguments_Initialize :: struct #packed {
+    clientID: Maybe(string) `json:"clientID,omitempty"`,
+    clientName: Maybe(string) `json:"clientName,omitempty"`,
+    adapterID: string,
+    locale: Maybe(string) `json:"locale,omitempty"`,
+    linesStartAt1: Maybe(bool) `json:"linesStartAt1,omitempty"`,
+    columnsStartAt1: Maybe(bool) `json:"columnsStartAt1,omitempty"`,
+    pathFormat: Maybe(string) `json:"pathFormat,omitempty"`,
+    supportsVariableType: Maybe(bool) `json:"supportsVariableType,omitempty"`,
+    supportsVariablePaging: Maybe(bool) `json:"supportsVariablePaging,omitempty"`,
+    supportsRunInTerminalRequest: Maybe(bool) `json:"supportsRunInTerminalRequest,omitempty"`,
+    supportsMemoryReferences: Maybe(bool) `json:"supportsMemoryReferences,omitempty"`,
+    supportsProgressReporting: Maybe(bool) `json:"supportsProgressReporting,omitempty"`,
+    supportsInvalidatedEvent: Maybe(bool) `json:"supportsInvalidatedEvent,omitempty"`,
+    supportsMemoryEvent: Maybe(bool) `json:"supportsMemoryEvent,omitempty"`,
+    supportsArgsCanBeInterpretedByShell: Maybe(bool) `json:"supportsArgsCanBeInterpretedByShell,omitempty"`,
+    supportsStartDebuggingRequest: Maybe(bool) `json:"supportsStartDebuggingRequest,omitempty"`,
+    supportsANSIStyling: Maybe(bool) `json:"supportsANSIStyling,omitempty"`,
 }
 
 Arguments_Disconnect :: struct #packed {
@@ -70,15 +92,17 @@ Response :: struct #packed {
     request_seq: number,
     success: bool,
     command: Command,
-    message: enum u8 {
-        cancelled,
-        notStopped,
-    },
+    message: Maybe(Message) `json:"message,omitempty"`,
 
     body: union {
+        Body_Empty,
         Body_Error,
-        Empty,
+        Body_Initialized,
     },
+}
+Message :: enum u8 {
+    cancelled,
+    notStopped,
 }
 
 Body_Error :: struct {
@@ -93,7 +117,8 @@ Body_Error :: struct {
     }
 }
 
-Empty :: struct {}
+Body_Empty :: struct {}
+Body_Initialized :: Capabilities
 
 
 /*
@@ -128,6 +153,72 @@ Body_OutputEvent :: struct #packed {
 /*
     Structures and such.
 */
+
+Capabilities :: struct {
+    supportsConfigurationDoneRequest: bool,
+    supportsFunctionBreakpoints: bool,
+    supportsConditionalBreakpoints: bool,
+    supportsHitConditionalBreakpoints: bool,
+    supportsEvaluateForHovers: bool,
+    //exceptionBreakpointFilters: [dynamic]ExceptionBreakpointsFilter,
+    supportsStepBack: bool,
+    supportsSetVariable: bool,
+    supportsRestartFrame: bool,
+    supportsGotoTargetsRequest: bool,
+    supportsStepInTargetsRequest: bool,
+    supportsCompletionsRequest: bool,
+    //completionTriggerCharacters: [dynamic]string,
+    supportsModulesRequest: bool,
+    //additionalModuleColumns: [dynamic]ColumnDescriptor,
+    supportedChecksumAlgorithms: string,
+    supportsRestartRequest: bool,
+    supportsExceptionOptions: bool,
+    supportsValueFormattingOptions: bool,
+    supportsExceptionInfoRequest: bool,
+    supportTerminateDebuggee: bool,
+    supportSuspendDebuggee: bool,
+    supportsDelayedStackTraceLoading: bool,
+    supportsLoadedSourcesRequest: bool,
+    supportsLogPoints: bool,
+    supportsTerminateThreadsRequest: bool,
+    supportsSetExpression: bool,
+    supportsTerminateRequest: bool,
+    supportsDataBreakpoints: bool,
+    supportsReadMemoryRequest: bool,
+    supportsWriteMemoryRequest: bool,
+    supportsDisassembleRequest: bool,
+    supportsCancelRequest: bool,
+    supportsBreakpointLocationsRequest: bool,
+    supportsClipboardContext: bool,
+    supportsSteppingGranularity: bool,
+    supportsInstructionBreakpoints: bool,
+    supportsExceptionFilterOptions: bool,
+    supportsSingleThreadExecutionRequests: bool,
+    supportsDataBreakpointBytes: bool,
+    //breakpointModes: [dynamic]BreakpointMode,
+    supportsANSIStyling: bool,
+}
+ExceptionBreakpointsFilter :: struct {
+    filter: string,
+    label: string,
+    description: Maybe(string),
+    default: Maybe(bool),
+     supportsCondition: Maybe(bool),
+     conditionDescription: Maybe(string),
+}
+ColumnDescriptor :: struct {
+    attributeName: string,
+    label: string,
+    format: Maybe(string),
+    //type?: 'string' | 'number' | 'boolean' | 'unixTimestampUTC';
+    width: Maybe(int),
+}
+BreakpointMode :: struct {
+    mode: string,
+    label: string,
+    description: Maybe(string),
+    appliesTo: string,
+}
 
 Source :: struct #packed {
     name: Maybe(string) `json:"name,omitempty"`,

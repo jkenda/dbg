@@ -139,6 +139,7 @@ read_message :: proc(conn: ^Connection_Stdio, sync := false, allocator := contex
 
     str = read_text(conn, sync, allocator) or_return
     msg = parse_message(str, allocator) or_return
+    //log.debug(str)
     return
 }
 
@@ -157,8 +158,9 @@ write_message :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (err: 
     conn.seq += 1
     set_seq(msg, conn.seq)
 
-    text := json.marshal(msg^, { use_enum_names = true }) or_return
+    text := json.marshal(msg^, { use_enum_names = true }, context.temp_allocator) or_return
     write_text(conn^, string(text))
+    free_all(context.temp_allocator)
 
     return
 }
