@@ -166,9 +166,9 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
     return io
 }
 
-handle_DAP_messages :: proc(connection: ^dap.Connection) {
+handle_DAP_messages :: proc(conn: ^dap.Connection) {
     for {
-        msg, err := dap.read_message(&connection.(dap.Connection_Stdio), allocator = context.temp_allocator)
+        msg, err := dap.read_message(&conn.(dap.Connection_Stdio), allocator = context.temp_allocator)
         if err == .Empty_Input do break
 
         switch err {
@@ -202,10 +202,26 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                         })
                     }
 
+                    dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_StackTrace{
+                        threadId = data.threads[0].id
+                    })
+                case .stackTrace:
+                    body := m.body.(dap.Body_StackTrace)
+                    log.debug(body)
+
+                    clear(&data.stack_frames)
+                    for stack_frame in body.stackFrames {
+                        frame := stack_frame
+                        frame.name = strings.clone(stack_frame.name)
+                        frame.moduleId = strings.clone(stack_frame.moduleId)
+                        if frame.instructionPointerReference != nil {
+                            frame.instructionPointerReference = strings.clone(frame.instructionPointerReference.?)
+                        }
+                        append(&data.stack_frames, frame)
+                    }
+
                 case ._unknown:
                     log.warn("response not implemented:", m)
-                case:
-                    log.warn("response handling not implemented:", m)
                 }
             case dap.Event:
                 switch m.event {
@@ -234,8 +250,6 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
 
                 case ._unknown:
                     log.warn("event not implemented:", m)
-                case:
-                    log.warn("event handling not implemented:", m)
                 }
             }
         case:
@@ -292,8 +306,8 @@ state_transition :: proc(conn: ^dap.Connection) {
     case .Running:
     case .Stopped:
         dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Threads{})
-        state = .Waiting
 
+        state = .Waiting
     case .Error:
     case .Exiting:
     }

@@ -30,6 +30,7 @@ Command :: enum u8 {
     setBreakpoints,
     configurationDone,
     threads,
+    stackTrace,
     disconnect,
     terminate,
 }
@@ -56,6 +57,7 @@ Arguments :: union {
     Arguments_SetBreakpoints,
     Arguments_ConfigurationDone,
     Arguments_Threads,
+    Arguments_StackTrace,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -97,6 +99,13 @@ Arguments_SetBreakpoints :: SourceBreakpoints
 Arguments_ConfigurationDone :: distinct Empty
 Arguments_Threads :: distinct Empty
 
+Arguments_StackTrace :: struct #packed {
+    threadId: number,
+    startFrame: Maybe(number) `json:"startFrame,omitempty"`,
+    levels: Maybe(number) `json:"levels,omitempty"`,
+    format: Maybe(StackFrameFormat) `json:"format,omitempty"`,
+}
+
 Arguments_Disconnect :: struct #packed {
     restart: Maybe(bool) `json:"restart,omitempty"`,
     terminateDebuggee: Maybe(bool) `json:"terminateDebuggee,omitempty"`,
@@ -124,6 +133,7 @@ Response :: struct #packed {
         Body_Error,
         Body_Initialized,
         Body_Threads,
+        Body_StackTrace,
 
         Body_Empty,
     },
@@ -151,6 +161,11 @@ Body_Initialized :: Capabilities
 
 Body_Threads :: struct #packed {
     threads: []Thread,
+}
+
+Body_StackTrace :: struct #packed {
+    stackFrames: []StackFrame,
+    totalFrames: Maybe(number),
 }
 
 
@@ -325,6 +340,29 @@ SourceBreakpoints :: struct #packed {
 Thread :: struct #packed {
   id: number,
   name: string,
+}
+
+StackFrameFormat :: struct #packed {
+    parameters: Maybe(bool) `json:"parameters,omitempty"`,
+    parameterTypes: Maybe(bool) `json:"parameterTypes,omitempty"`,
+    parameterNames: Maybe(bool) `json:"parameterNames,omitempty"`,
+    parameterValues: Maybe(bool) `json:"parameterValues,omitempty"`,
+    line: Maybe(bool) `json:"line,omitempty"`,
+    module: Maybe(bool) `json:"module,omitempty"`,
+    includeAll: Maybe(bool) `json:"includeAll,omitempty"`,
+}
+StackFrame :: struct #packed {
+    id: number,
+    name: string,
+    source: Maybe(Source),
+    line: number,
+    column: number,
+    endLine: Maybe(number),
+    endColumn: Maybe(number),
+    canRestart: Maybe(bool),
+    instructionPointerReference: Maybe(string),
+    moduleId: string,
+    presentationHint: Maybe(enum { normal, label, subtle }),
 }
 
 SourceBreakpoint :: struct #packed {

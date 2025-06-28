@@ -12,6 +12,7 @@ View_Type :: enum {
     Disassembly,
     Processes,
     Threads,
+    Stack_Trace,
 }
 
 View_Names: [View_Type]cstring = {
@@ -22,6 +23,7 @@ View_Names: [View_Type]cstring = {
     .Disassembly = "Disassembly",
     .Processes   = "Processes",
     .Threads     = "Threads",
+    .Stack_Trace = "Stack Trace"
 }
 
 view_show_proc: [View_Type]proc(Global_Data) = {
@@ -32,6 +34,7 @@ view_show_proc: [View_Type]proc(Global_Data) = {
     .Disassembly = show_dasm_view,
     .Processes   = show_processes_view,
     .Threads     = show_threads_view,
+    .Stack_Trace = show_stack_view,
 }
 
 View_Data :: struct {
@@ -43,7 +46,7 @@ runtime_data: struct {
     output: [dynamic]u8
 }
 
-singletons: bit_set[View_Type] : { .Output, .Disassembly, .Processes, .Threads }
+singletons: bit_set[View_Type] : { .Output, .Disassembly, .Processes, .Threads, .Stack_Trace }
 data: [View_Type][dynamic]View_Data
 
 Process :: struct {
@@ -61,7 +64,8 @@ Global_Data :: struct {
     },
     processes: [dynamic]Process,
     breakpoints: [dynamic]dap.SourceBreakpoints,
-    threads: [dynamic]dap.Thread
+    threads: [dynamic]dap.Thread,
+    stack_frames: [dynamic]dap.StackFrame,
 }
 
 init_data :: proc() {

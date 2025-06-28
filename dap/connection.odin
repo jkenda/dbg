@@ -182,6 +182,8 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .configurationDone
         case Arguments_Threads:
             return .threads
+        case Arguments_StackTrace:
+            return .stackTrace
         case Arguments_Disconnect:
             return .disconnect
         case Arguments_Terminate:

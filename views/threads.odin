@@ -4,7 +4,7 @@ import im "../odin-imgui"
 import "core:strconv"
 
 show_threads_view :: proc(data: Global_Data) {
-    if (im.BeginTable("Threads", 3, im.TableFlags_Resizable)) {
+    if (im.BeginTable("Threads", 2, im.TableFlags_Resizable)) {
         im.TableSetupColumn("ID"  , {.WidthStretch})
         im.TableSetupColumn("Name", {.WidthStretch})
 

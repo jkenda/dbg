@@ -62,16 +62,16 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
 
     if response.success {
         switch response.command {
-        case .cancel, .launch, .disconnect, .terminate:
+        case .cancel, .launch, .disconnect, .terminate, .configurationDone:
             response.body = Body_Empty{}
         case .initialize:
             response.body = parse_body(Body_Initialized, msg_str) or_return
-        case .configurationDone:
-            response.body = Body_Empty{}
         case .setBreakpoints:
             unimplemented()
         case .threads:
             response.body = parse_body(Body_Threads, msg_str) or_return
+        case .stackTrace:
+            response.body = parse_body(Body_StackTrace, msg_str) or_return
         case nil, ._unknown:
             log.warn("unknown message:", msg_str)
             err = .Unknown_Message
