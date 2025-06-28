@@ -2,7 +2,7 @@ package views
 
 import im "../odin-imgui"
 
-show_memory_view :: proc(data: View_Data) {
+show_memory_view :: proc(data: Global_Data) {
     NUM_COLUMNS :: 8
     if (im.BeginTable(
             "table1",

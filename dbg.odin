@@ -149,16 +149,16 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
 
         io.IniFilename = nil
     }
-    {
-        style := im.GetStyle()
-        style.WindowRounding = 0
-        style.Colors[im.Col.WindowBg].w = 1
-        style.FrameBorderSize = 1
-    }
+    //{
+    //    style := im.GetStyle()
+    //    style.WindowRounding = 0
+    //    style.Colors[im.Col.WindowBg].w = 1
+    //    style.FrameBorderSize = 1
+    //}
 
     im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/NotoSans-Regular.ttf", 18)
 
-    im.StyleColorsClassic()
+    im.StyleColorsDark()
 
     imgui_impl_sdl2.InitForOpenGL(window, gl_ctx)
     imgui_impl_opengl3.Init(nil)
@@ -206,9 +206,9 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                     body := m.body.(dap.Body_Process)
                     log.info("new process:", body)
 
-                    append(&data.processes, Process{
+                    append(&data.processes, views.Process{
                         name = strings.clone(body.name),
-                        pid = u64(body.systemProcessId.? or_else 0),
+                        pid = int(body.systemProcessId.? or_else 0),
                         local = body.isLocalProcess.? or_else true,
                         start_method = body.startMethod.? or_else .launch,
                     })
@@ -437,11 +437,11 @@ show_main_window :: proc(window: ^sdl.Window) {
             for view_type in views.View_Type {
                 if view_type in views.singletons {
                     resize(&views.data[view_type], 1)
-                    views.show_view(view_type, &views.data[view_type][0])
+                    views.show_view(view_type, &views.data[view_type][0], data)
                 }
                 else {
                     for &view_data in views.data[view_type] {
-                        views.show_view(view_type, &view_data)
+                        views.show_view(view_type, &view_data, data)
                     }
                 }
 
@@ -474,25 +474,10 @@ State :: enum {
 }
 state: State
 
-Process :: struct {
-    name: string,
-    pid: u64,
-    local: bool,
-    start_method: dap.StartMethod
-}
-
 debugger_capabilities: dap.Capabilities
 debugger_initialized := false
 
-data: struct {
-    executable: struct {
-        program: [dynamic]u8,
-        args: [dynamic]u8,
-        cwd:  [dynamic]u8
-    },
-    processes: [dynamic]Process,
-    breakpoints: [dynamic]dap.SourceBreakpoints,
-}
+data: views.Global_Data
 
 show_exec_dialog: bool
 
