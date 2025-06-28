@@ -29,6 +29,7 @@ Command :: enum u8 {
     launch,
     setBreakpoints,
     configurationDone,
+    threads,
     disconnect,
     terminate,
 }
@@ -54,6 +55,7 @@ Arguments :: union {
     Arguments_Launch,
     Arguments_SetBreakpoints,
     Arguments_ConfigurationDone,
+    Arguments_Threads,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -93,6 +95,7 @@ Arguments_Launch :: struct #packed {
 
 Arguments_SetBreakpoints :: SourceBreakpoints
 Arguments_ConfigurationDone :: distinct Empty
+Arguments_Threads :: distinct Empty
 
 Arguments_Disconnect :: struct #packed {
     restart: Maybe(bool) `json:"restart,omitempty"`,
@@ -120,6 +123,7 @@ Response :: struct #packed {
     body: union {
         Body_Error,
         Body_Initialized,
+        Body_Threads,
 
         Body_Empty,
     },
@@ -144,6 +148,10 @@ Body_Error :: struct {
 }
 
 Body_Initialized :: Capabilities
+
+Body_Threads :: struct #packed {
+    threads: []Thread,
+}
 
 
 /*
@@ -312,6 +320,11 @@ SourceBreakpoints :: struct #packed {
     source: Source,
     breakpoints: Maybe([]SourceBreakpoint) `json:"breakpoints,omitempty"`,
     sourceModified: Maybe(bool) `json:"sourceModified,omitempty"`,
+}
+
+Thread :: struct #packed {
+  id: number,
+  name: string,
 }
 
 SourceBreakpoint :: struct #packed {

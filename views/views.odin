@@ -61,6 +61,7 @@ Global_Data :: struct {
     },
     processes: [dynamic]Process,
     breakpoints: [dynamic]dap.SourceBreakpoints,
+    threads: [dynamic]dap.Thread
 }
 
 init_data :: proc() {

@@ -180,6 +180,8 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .setBreakpoints
         case Arguments_ConfigurationDone:
             return .configurationDone
+        case Arguments_Threads:
+            return .threads
         case Arguments_Disconnect:
             return .disconnect
         case Arguments_Terminate:

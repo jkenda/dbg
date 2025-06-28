@@ -191,6 +191,16 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                     log.warn("response not implemented:", m)
                 case .configurationDone:
                     log.info("configuration done")
+                case .threads:
+                    clear(&data.threads)
+
+                    body := m.body.(dap.Body_Threads)
+                    for thread in body.threads {
+                        append(&data.threads, dap.Thread{
+                            name = strings.clone(thread.name),
+                            id = thread.id,
+                        })
+                    }
 
                 case ._unknown:
                     log.warn("response not implemented:", m)
@@ -220,6 +230,7 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                     state = .Initializing
                 case .stopped:
                     log.info("stopped:", m.body)
+                    state = .Stopped
 
                 case ._unknown:
                     log.warn("event not implemented:", m)
@@ -280,6 +291,8 @@ state_transition :: proc(conn: ^dap.Connection) {
 
     case .Running:
     case .Stopped:
+        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Threads{})
+        state = .Waiting
 
     case .Error:
     case .Exiting:
