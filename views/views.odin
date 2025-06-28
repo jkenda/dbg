@@ -36,7 +36,7 @@ runtime_data: struct {
     output: [dynamic]u8
 }
 
-singletons: bit_set[View_Type] = { .Output, .Disassembly }
+singletons: bit_set[View_Type] : { .Output, .Disassembly }
 data: [View_Type][dynamic]View_Data
 
 init_data :: proc() {

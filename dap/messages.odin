@@ -5,7 +5,7 @@ package dap
 */
 
 
-number :: distinct u32
+number :: distinct u64
 
 Protocol_Message :: union {
     Request,
@@ -14,14 +14,19 @@ Protocol_Message :: union {
 }
 
 Message_Type :: enum u8 {
+    _unknown,
+
     request,
     response,
     event,
 }
 
 Command :: enum u8 {
+    _unknown,
+
     cancel,
     initialize,
+    launch,
     disconnect,
     terminate,
 }
@@ -42,6 +47,7 @@ Request :: struct #packed {
 Arguments :: union {
     Arguments_Cancel,
     Arguments_Initialize,
+    Arguments_Launch,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -69,6 +75,14 @@ Arguments_Initialize :: struct #packed {
     supportsArgsCanBeInterpretedByShell: Maybe(bool) `json:"supportsArgsCanBeInterpretedByShell,omitempty"`,
     supportsStartDebuggingRequest: Maybe(bool) `json:"supportsStartDebuggingRequest,omitempty"`,
     supportsANSIStyling: Maybe(bool) `json:"supportsANSIStyling,omitempty"`,
+}
+
+Arguments_Launch :: struct #packed {
+    program: string,
+    args: []string `json:"args,omitempty"`,
+    cwd: string `json:"cwd,omitempty"`,
+    stopOnEntry: Maybe(bool) `json:"stopOnEntry,omitempty"`,
+    noDebug: Maybe(bool) `json:"noDebug,omitempty"`,
 }
 
 Arguments_Disconnect :: struct #packed {
@@ -125,15 +139,28 @@ Body_Initialized :: Capabilities
    Events.
 */
 
+Event_Type :: enum u8 {
+    _unknown,
+
+    output,
+    initialized,
+    process,
+    exited,
+    terminated,
+}
+
 Event :: struct #packed {
     seq: number,
     type: Message_Type,
 
-    event: enum u8 {
-        output,
-    },
+    event: Event_Type,
     body: union {
         Body_OutputEvent,
+        Body_Process,
+        Body_Exited,
+        Body_Terminated,
+
+        Body_Empty,
     },
 }
 
@@ -149,6 +176,25 @@ Body_OutputEvent :: struct #packed {
     locationReference: Maybe(number) `json:"locationReference,omitempty"`,
 }
 
+Body_Process :: struct #packed {
+    name: string,
+    systemProcessId: Maybe(number),
+    isLocalProcess: Maybe(bool),
+    startMethod: Maybe(StartMethod),
+    pointerSize: Maybe(number),
+}
+StartMethod :: enum u8 {
+    launch,
+    attach,
+    attachForSuspendedLaunch,
+}
+
+Body_Exited :: struct #packed {
+    exitCode: number,
+}
+
+Body_Terminated :: struct #packed {
+}
 
 /*
     Structures and such.
@@ -211,7 +257,7 @@ ColumnDescriptor :: struct {
     label: string,
     format: Maybe(string),
     //type?: 'string' | 'number' | 'boolean' | 'unixTimestampUTC';
-    width: Maybe(int),
+    width: Maybe(number),
 }
 BreakpointMode :: struct {
     mode: string,

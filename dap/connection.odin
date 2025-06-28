@@ -31,6 +31,7 @@ Connection_Socket :: struct {
 }
 
 GDB             :: "gdb"
+LLDB_DAP        :: "lldb-dap"
 DAP             :: "--interpreter=dap"
 CONTENT_LENGTH  :: "Content-Length: "
 
@@ -39,9 +40,17 @@ connect_stdio :: proc() -> (conn: Connection, err: Error) {
     r_in , w_in  := os2.pipe() or_return
     r_out, w_out := os2.pipe() or_return
 
-    log.info("starting GDB:", GDB, DAP)
+    when ODIN_OS == .Darwin {
+        command: []string = { LLDB_DAP }
+    }
+    else {
+        command: []string = { GDB, DAP }
+    }
+
+    log.info("starting debugger:", command)
+
     process := os2.process_start(os2.Process_Desc{
-        command = { GDB, DAP },
+        command = command,
         stdin = r_in,
         stdout = w_out,
     }) or_return
@@ -83,12 +92,7 @@ disconnect :: proc(conn: ^Connection, allocator := context.allocator) -> bool {
 
 disconnect_stdio :: proc(conn: ^Connection_Stdio, allocator := context.allocator) -> bool {
     log.info("shutting down debug adapter")
-    msg: Protocol_Message = Request{
-        type = .request,
-        command = .disconnect,
-        arguments = Arguments_Disconnect{},
-    }
-    write_message(conn, &msg)
+    write_message(conn, Arguments_Disconnect{})
     disconnect_request_seq := conn.seq
 
     log.info("waiting for shutdown")
@@ -138,12 +142,12 @@ read_message :: proc(conn: ^Connection_Stdio, sync := false, allocator := contex
     str: string
 
     str = read_text(conn, sync, allocator) or_return
-    msg = parse_message(str, allocator) or_return
     //log.debug(str)
+    msg = parse_message(str, allocator) or_return
     return
 }
 
-write_message :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (err: json.Marshal_Error) {
+write_message_msg :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (err: json.Marshal_Error) {
     set_seq :: proc(msg: ^Protocol_Message, seq: number) {
         switch &m in msg {
         case Request:
@@ -160,9 +164,41 @@ write_message :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (err: 
 
     text := json.marshal(msg^, { use_enum_names = true }, context.temp_allocator) or_return
     write_text(conn^, string(text))
-    free_all(context.temp_allocator)
+    //log.debug(string(text))
 
     return
+}
+
+write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err: json.Marshal_Error) {
+    get_command :: proc(args: Arguments) -> Command {
+        switch a in args {
+        case Arguments_Cancel:
+            return .cancel
+        case Arguments_Initialize:
+            return .initialize
+        case Arguments_Launch:
+            return .launch
+        case Arguments_Disconnect:
+            return .disconnect
+        case Arguments_Terminate:
+            return .terminate
+        }
+
+        return nil
+    }
+
+    msg: Protocol_Message = Request {
+        type = .request,
+        command = get_command(args),
+        arguments = args,
+    }
+
+    return write_message_msg(conn, &msg)
+}
+
+write_message :: proc {
+    write_message_msg,
+    write_message_request,
 }
 
 @(private)
@@ -213,6 +249,7 @@ write_text :: proc(conn: Connection_Stdio, text: string) {
     io.write_string(conn.stdin.stream, content_length)
     io.write_string(conn.stdin.stream, "\r\n\r\n")
     io.write_string(conn.stdin.stream, text)
+    io.flush(conn.stdin.stream)
 }
 
 

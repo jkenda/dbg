@@ -39,46 +39,24 @@ main :: proc() {
     views.init_data()
     defer views.delete_data()
 
+    state = .Initializing
     dap_connection := init_debugger()
     defer dap.disconnect(&dap_connection)
 
-    running := true
-    for running {
-        handle_DAP_events(&dap_connection)
-        handle_SDL_events(&running)
+    for state != .Exiting {
+        handle_DAP_messages(&dap_connection)
+        handle_SDL_events()
 
-        { // NewFrame
-            imgui_impl_opengl3.NewFrame()
-            imgui_impl_sdl2.NewFrame()
-            im.NewFrame()
-        }
+        state_transition(&dap_connection)
 
-        { // show main window
-            show_main_window(window)
-        }
+        new_frame()
+        show_GUI(window)
+        render_GUI(window, io^)
 
-        { // Render
-            im.Render()
-            gl.Viewport(0, 0, i32(io.DisplaySize.x), i32(io.DisplaySize.y))
-            gl.ClearColor(0, 0, 0, 1)
-            gl.Clear(gl.COLOR_BUFFER_BIT)
-            imgui_impl_opengl3.RenderDrawData(im.GetDrawData())
-        }
-
-        if (.ViewportsEnable in io.ConfigFlags) {
-            backup_current_window := sdl.GL_GetCurrentWindow()
-            backup_current_context := sdl.GL_GetCurrentContext()
-
-            im.UpdatePlatformWindows();
-            im.RenderPlatformWindowsDefault();
-
-            sdl.GL_MakeCurrent(backup_current_window, backup_current_context);
-        }
-
-        sdl.GL_SwapWindow(window)
+        free_all(context.temp_allocator)
     }
 
-    { // save .ini file with custom data added ()
+    { // save .ini file with custom data added
         io.WantSaveIniSettings = true
         ini_len: uint
         ini_data := im.SaveIniSettingsToMemory(&ini_len)
@@ -94,21 +72,16 @@ init_debugger :: proc() -> dap.Connection {
     assert(err == nil, strings.clone_from(sdl.GetError()))
 
     { // initialize debugger
-        req : dap.Protocol_Message = dap.Request{
-            type = .request,
-            command = .initialize,
-            arguments = dap.Arguments_Initialize{
-                clientID = "dbg",
-                adapterID = "gdb",
-                linesStartAt1 = true,
-                columnsStartAt1 = true,
-            }
-        }
-        dap.write_message(&conn.(dap.Connection_Stdio), &req)
+        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Initialize{
+            clientID = "dbg",
+            adapterID = "gdb",
+            linesStartAt1 = true,
+            columnsStartAt1 = true,
+        })
 
         // wait for 'initialized' response
         for !debugger_initialized {
-            handle_DAP_events(&conn)
+            handle_DAP_messages(&conn)
         }
 
         log.info("debugger initialized")
@@ -192,7 +165,7 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
     return io
 }
 
-handle_DAP_events :: proc(connection: ^dap.Connection) {
+handle_DAP_messages :: proc(connection: ^dap.Connection) {
     for {
         msg, err := dap.read_message(&connection.(dap.Connection_Stdio), allocator = context.temp_allocator)
         if err == .Empty_Input do break
@@ -206,9 +179,15 @@ handle_DAP_events :: proc(connection: ^dap.Connection) {
                 switch m.command {
                 case .cancel, .disconnect, .terminate:
                     unreachable()
+                case .launch:
+                    log.info("program launched")
                 case .initialize:
+                    log.info("debugger initialized")
                     debugger_capabilities = m.body.(dap.Body_Initialized)
                     debugger_initialized = true
+
+                case ._unknown:
+                    log.warn("response not implemented:", m)
                 case:
                     log.warn("response handling not implemented:", m)
                 }
@@ -217,27 +196,142 @@ handle_DAP_events :: proc(connection: ^dap.Connection) {
                 case .output:
                     log.debug("output:", strings.trim_space(m.body.(dap.Body_OutputEvent).output))
                     append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
+                case .process:
+                    body := m.body.(dap.Body_Process)
+                    log.info("new process:", body.name)
+
+                    append(&data.processes, Process{
+                        name = strings.clone(body.name),
+                        pid = u64(body.systemProcessId.? or_else 0),
+                        local = body.isLocalProcess.? or_else true,
+                        start_method = body.startMethod.? or_else .launch,
+                    })
+                case .initialized:
+                    log.info("program initialized")
+                    state = .SettingBreakpoints
+                case .exited, .terminated:
+                    log.info("debugee exited")
+                    state = .Initializing
+
+                case ._unknown:
+                    log.warn("event not implemented:", m)
                 case:
                     log.warn("event handling not implemented:", m)
                 }
             }
         case:
             log.error(err)
+            state = .Error
         }
     }
-
-    free_all(context.temp_allocator)
 }
 
-handle_SDL_events :: proc(running: ^bool) {
+state_transition :: proc(conn: ^dap.Connection) {
+    switch state {
+    case .Initializing:
+        show_exec_dialog = true
+        state = .SettingExecutable
+    case .SettingExecutable:
+        if !show_exec_dialog {
+            // dialog has been closed
+            state = .Launching
+        }
+    case .Launching:
+        args: []string
+        if len(data.executable.args) > 0 {
+            args = strings.split(string(data.executable.args[:]), " ", context.temp_allocator)
+        }
+        program := string(data.executable.program[:])
+        cwd := string(data.executable.cwd[:])
+
+        log.info("launching program ", program, "with args", args, "in cwd", cwd)
+        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Launch{
+            program = program,
+            args = args,
+            cwd = cwd,
+            stopOnEntry = true,
+        })
+
+        state = .Waiting
+    case .SettingBreakpoints:
+    case .Waiting:
+
+    case .Running:
+    case .Stopped:
+
+    case .Error:
+    case .Exiting:
+    }
+}
+
+handle_SDL_events :: proc() {
     e: sdl.Event
     for sdl.PollEvent(&e) {
         imgui_impl_sdl2.ProcessEvent(&e)
 
         #partial switch e.type {
-        case .QUIT: running^ = false
+        case .QUIT: state = .Exiting
         }
     }
+}
+
+new_frame :: proc() {
+    imgui_impl_opengl3.NewFrame()
+    imgui_impl_sdl2.NewFrame()
+    im.NewFrame()
+}
+
+show_GUI :: proc(window: ^sdl.Window) {
+    show_main_window(window)
+
+    if show_exec_dialog {
+        if im.Begin("Executable", &show_exec_dialog, { .NoDocking, }) {
+            {
+                reserve(&data.executable.program, 2 * len(data.executable.program) + 0x10)
+                cstr_buf := cstring(raw_data(data.executable.program))
+
+                im.InputTextWithHint("Program", "Path to executable", cstr_buf, cap(data.executable.program))
+                resize(&data.executable.program, len(cstr_buf))
+            }
+            {
+                reserve(&data.executable.args, 2 * len(data.executable.args) + 0x10)
+                cstr_buf := cstring(raw_data(data.executable.args))
+
+                im.InputTextWithHint("Args", "Command-line arguments", cstr_buf, cap(data.executable.args))
+                resize(&data.executable.args, len(cstr_buf))
+            }
+            {
+                reserve(&data.executable.cwd, 2 * len(data.executable.cwd) + 0x10)
+                cstr_buf := cstring(raw_data(data.executable.cwd))
+
+                im.InputTextWithHint("CWD", "Current working directory", cstr_buf, cap(data.executable.cwd))
+                resize(&data.executable.cwd, len(cstr_buf))
+            }
+            im.End()
+        }
+    }
+}
+
+render_GUI :: proc(window: ^sdl.Window, io: im.IO) {
+    { // Render
+        im.Render()
+        gl.Viewport(0, 0, i32(io.DisplaySize.x), i32(io.DisplaySize.y))
+        gl.ClearColor(0, 0, 0, 1)
+        gl.Clear(gl.COLOR_BUFFER_BIT)
+        imgui_impl_opengl3.RenderDrawData(im.GetDrawData())
+    }
+
+    if (.ViewportsEnable in io.ConfigFlags) {
+        backup_current_window := sdl.GL_GetCurrentWindow()
+        backup_current_context := sdl.GL_GetCurrentContext()
+
+        im.UpdatePlatformWindows();
+        im.RenderPlatformWindowsDefault();
+
+        sdl.GL_MakeCurrent(backup_current_window, backup_current_context);
+    }
+
+    sdl.GL_SwapWindow(window)
 }
 
 ROOT_DOCK_SPACE :: "RootDockSpace"
@@ -342,8 +436,41 @@ show_main_window :: proc(window: ^sdl.Window) {
     im.End()
 }
 
+State :: enum {
+    Initializing,
+    SettingExecutable,
+    Launching,
+    SettingBreakpoints,
+    Waiting,
+
+    Running,
+    Stopped,
+
+    Error,
+    Exiting,
+}
+state: State
+
+Process :: struct {
+    name: string,
+    pid: u64,
+    local: bool,
+    start_method: dap.StartMethod
+}
+
 debugger_capabilities: dap.Capabilities
 debugger_initialized := false
+
+data: struct {
+    executable: struct {
+        program: [dynamic]u8,
+        args: [dynamic]u8,
+        cwd:  [dynamic]u8
+    },
+    processes: [dynamic]Process
+}
+
+show_exec_dialog: bool
 
 when ODIN_DEBUG {
     show_demo_window: bool
