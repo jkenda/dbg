@@ -30,9 +30,13 @@ Connection_Socket :: struct {
     seq: number,
 }
 
-GDB             :: "gdb"
-LLDB_DAP        :: "lldb-dap"
-DAP             :: "--interpreter=dap"
+when ODIN_OS == .Darwin {
+    COMMAND: []string : { "lldb-dap" }
+}
+else {
+    COMMAND: []string : { "gdb", "--interpreter=dap" }
+}
+
 CONTENT_LENGTH  :: "Content-Length: "
 
 
@@ -40,23 +44,16 @@ connect_stdio :: proc() -> (conn: Connection, err: Error) {
     r_in , w_in  := os2.pipe() or_return
     r_out, w_out := os2.pipe() or_return
 
-    when ODIN_OS == .Darwin {
-        command: []string = { LLDB_DAP }
-    }
-    else {
-        command: []string = { GDB, DAP }
-    }
-
-    log.info("starting debugger:", command)
+    log.info("starting debugger:", strings.join(COMMAND, " "))
 
     process := os2.process_start(os2.Process_Desc{
-        command = command,
+        command = COMMAND,
         stdin = r_in,
         stdout = w_out,
     }) or_return
     os2.close(r_in)
     os2.close(w_out)
-    log.info("started")
+    log.info("debugger started. ready for 'initialize'")
 
     conn = Connection_Stdio{
         process = process,

@@ -83,8 +83,6 @@ init_debugger :: proc() -> dap.Connection {
         for !debugger_initialized {
             handle_DAP_messages(&conn)
         }
-
-        log.info("debugger initialized")
     }
 
     return conn
@@ -182,7 +180,7 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                 case .launch:
                     log.info("program launched")
                 case .initialize:
-                    log.info("debugger initialized")
+                    log.info("debugger initialized. ready for 'launch'")
                     debugger_capabilities = m.body.(dap.Body_Initialized)
                     debugger_initialized = true
 
@@ -207,7 +205,7 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                         start_method = body.startMethod.? or_else .launch,
                     })
                 case .initialized:
-                    log.info("program initialized")
+                    log.info("program initialized. ready for 'setBreakpoint'")
                     state = .SettingBreakpoints
                 case .exited, .terminated:
                     log.info("debugee exited")
