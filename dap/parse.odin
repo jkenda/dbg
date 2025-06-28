@@ -72,6 +72,8 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
             response.body = parse_body(Body_Threads, msg_str) or_return
         case .stackTrace:
             response.body = parse_body(Body_StackTrace, msg_str) or_return
+        case .disassemble:
+            response.body = parse_body(Body_Disassemble, msg_str) or_return
         case nil, ._unknown:
             log.warn("unknown message:", msg_str)
             err = .Unknown_Message

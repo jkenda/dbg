@@ -5,7 +5,7 @@ package dap
 */
 
 
-number :: distinct u64
+number :: distinct i64
 
 Protocol_Message :: union {
     Request,
@@ -31,6 +31,7 @@ Command :: enum u8 {
     configurationDone,
     threads,
     stackTrace,
+    disassemble,
     disconnect,
     terminate,
 }
@@ -58,6 +59,7 @@ Arguments :: union {
     Arguments_ConfigurationDone,
     Arguments_Threads,
     Arguments_StackTrace,
+    Arguments_Disassemble,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -106,6 +108,14 @@ Arguments_StackTrace :: struct #packed {
     format: Maybe(StackFrameFormat) `json:"format,omitempty"`,
 }
 
+Arguments_Disassemble :: struct #packed {
+    memoryReference: string,
+    offset: Maybe(number),
+    instructionOffset: Maybe(number),
+    instructionCount: Maybe(number),
+    resolveSymbols: Maybe(bool),
+}
+
 Arguments_Disconnect :: struct #packed {
     restart: Maybe(bool) `json:"restart,omitempty"`,
     terminateDebuggee: Maybe(bool) `json:"terminateDebuggee,omitempty"`,
@@ -134,6 +144,7 @@ Response :: struct #packed {
         Body_Initialized,
         Body_Threads,
         Body_StackTrace,
+        Body_Disassemble,
 
         Body_Empty,
     },
@@ -166,6 +177,22 @@ Body_Threads :: struct #packed {
 Body_StackTrace :: struct #packed {
     stackFrames: []StackFrame,
     totalFrames: Maybe(number),
+}
+
+Body_Disassemble :: struct #packed {
+    instructions: []DisassembledInstruction,
+}
+DisassembledInstruction :: struct #packed {
+    address: string,
+    instructionBytes: Maybe(string),
+    instruction: string,
+    symbol: Maybe(string),
+    location: Maybe(Source),
+    line: Maybe(number),
+    column: Maybe(number),
+    endLine: Maybe(number),
+    endColumn: Maybe(number),
+    presentationHint: Maybe(enum { normal, invalid }),
 }
 
 
@@ -249,6 +276,7 @@ StoppedReason :: enum u8 {
     entry,
     goto,
 }
+
 
 /*
     Structures and such.
@@ -354,13 +382,13 @@ StackFrameFormat :: struct #packed {
 StackFrame :: struct #packed {
     id: number,
     name: string,
-    source: Maybe(Source),
+    source: Maybe(Source) `json:"source,omitempty"`,
     line: number,
     column: number,
-    endLine: Maybe(number),
-    endColumn: Maybe(number),
-    canRestart: Maybe(bool),
-    instructionPointerReference: Maybe(string),
+    endLine: Maybe(number) `json:"endLine,omitempty"`,
+    endColumn: Maybe(number) `json:"endColumn,omitempty"`,
+    canRestart: Maybe(bool) `json:"canRestart,omitempty"`,
+    instructionPointerReference: Maybe(string) `json:"instructionPointerReference,omitempty"`,
     moduleId: string,
     presentationHint: Maybe(enum { normal, label, subtle }),
 }

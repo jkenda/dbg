@@ -156,7 +156,7 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
     //    style.FrameBorderSize = 1
     //}
 
-    im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/NotoSans-Regular.ttf", 18)
+    im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/CONSOLA.ttf", 14)
 
     im.StyleColorsDark()
 
@@ -207,7 +207,6 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     })
                 case .stackTrace:
                     body := m.body.(dap.Body_StackTrace)
-                    log.debug(body)
 
                     clear(&data.stack_frames)
                     for stack_frame in body.stackFrames {
@@ -218,6 +217,25 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                             frame.instructionPointerReference = strings.clone(frame.instructionPointerReference.?)
                         }
                         append(&data.stack_frames, frame)
+                    }
+
+                    if data.stack_frames[0].instructionPointerReference != nil {
+                        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Disassemble{
+                            memoryReference = data.stack_frames[0].instructionPointerReference.?,
+                            //instructionOffset = -4,
+                            instructionCount = 100,
+                            resolveSymbols = true,
+                        })
+                    }
+
+                case .disassemble:
+                    body := m.body.(dap.Body_Disassemble)
+                    clear(&data.disassembly)
+                    for instr in body.instructions {
+                        append(&data.disassembly, views.DasmLine{
+                            address = strings.clone(instr.address),
+                            instr   = strings.clone(instr.instruction),
+                        })
                     }
 
                 case ._unknown:

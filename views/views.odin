@@ -56,6 +56,11 @@ Process :: struct {
     start_method: dap.StartMethod
 }
 
+DasmLine :: struct {
+    address: string,
+    instr: string,
+}
+
 Global_Data :: struct {
     executable: struct {
         program: [dynamic]u8,
@@ -66,6 +71,7 @@ Global_Data :: struct {
     breakpoints: [dynamic]dap.SourceBreakpoints,
     threads: [dynamic]dap.Thread,
     stack_frames: [dynamic]dap.StackFrame,
+    disassembly: [dynamic]DasmLine,
 }
 
 init_data :: proc() {
