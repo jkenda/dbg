@@ -9,8 +9,8 @@ pkgs.mkShell {
     SDL2
     libcxx
     python311Packages.ply
-    gdb
-    gf
+    #gdb
+    #gf
 
     tree
   ];

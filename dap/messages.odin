@@ -27,9 +27,13 @@ Command :: enum u8 {
     cancel,
     initialize,
     launch,
+    setBreakpoints,
+    configurationDone,
     disconnect,
     terminate,
 }
+
+Empty :: struct {}
 
 
 /*
@@ -48,6 +52,8 @@ Arguments :: union {
     Arguments_Cancel,
     Arguments_Initialize,
     Arguments_Launch,
+    Arguments_SetBreakpoints,
+    Arguments_ConfigurationDone,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -85,6 +91,9 @@ Arguments_Launch :: struct #packed {
     noDebug: Maybe(bool) `json:"noDebug,omitempty"`,
 }
 
+Arguments_SetBreakpoints :: SourceBreakpoints
+Arguments_ConfigurationDone :: distinct Empty
+
 Arguments_Disconnect :: struct #packed {
     restart: Maybe(bool) `json:"restart,omitempty"`,
     terminateDebuggee: Maybe(bool) `json:"terminateDebuggee,omitempty"`,
@@ -109,15 +118,18 @@ Response :: struct #packed {
     message: Maybe(Message) `json:"message,omitempty"`,
 
     body: union {
-        Body_Empty,
         Body_Error,
         Body_Initialized,
+
+        Body_Empty,
     },
 }
 Message :: enum u8 {
     cancelled,
     notStopped,
 }
+
+Body_Empty :: distinct Empty
 
 Body_Error :: struct {
     error: struct #packed {
@@ -131,7 +143,6 @@ Body_Error :: struct {
     }
 }
 
-Body_Empty :: struct {}
 Body_Initialized :: Capabilities
 
 
@@ -147,6 +158,7 @@ Event_Type :: enum u8 {
     process,
     exited,
     terminated,
+    stopped,
 }
 
 Event :: struct #packed {
@@ -159,6 +171,7 @@ Event :: struct #packed {
         Body_Process,
         Body_Exited,
         Body_Terminated,
+        Body_Stopped,
 
         Body_Empty,
     },
@@ -178,10 +191,10 @@ Body_OutputEvent :: struct #packed {
 
 Body_Process :: struct #packed {
     name: string,
-    systemProcessId: Maybe(number),
-    isLocalProcess: Maybe(bool),
-    startMethod: Maybe(StartMethod),
-    pointerSize: Maybe(number),
+    systemProcessId: Maybe(number) `json:"systemProcessId,omitempty"`,
+    isLocalProcess: Maybe(bool) `json:"isLocalProcess,omitempty"`,
+    startMethod: Maybe(StartMethod) `json:"startMethod,omitempty"`,
+    pointerSize: Maybe(number) `json:"pointerSize,omitempty"`,
 }
 StartMethod :: enum u8 {
     launch,
@@ -196,11 +209,29 @@ Body_Exited :: struct #packed {
 Body_Terminated :: struct #packed {
 }
 
+Body_Stopped :: struct #packed {
+    reason: StoppedReason,
+    description: Maybe(string),
+    threadId: Maybe(number),
+    preserveFocusHint: Maybe(bool),
+    text: Maybe(string),
+    allThreadsStopped: Maybe(bool),
+    hitBreakpointIds: Maybe([]number),
+}
+StoppedReason :: enum u8 {
+    step,
+    breakpoint,
+    exception,
+    pause,
+    entry,
+    goto,
+}
+
 /*
     Structures and such.
 */
 
-Capabilities :: struct {
+Capabilities :: struct #packed {
     supportsConfigurationDoneRequest: bool,
     supportsFunctionBreakpoints: bool,
     supportsConditionalBreakpoints: bool,
@@ -244,22 +275,22 @@ Capabilities :: struct {
     //breakpointModes: [dynamic]BreakpointMode,
     supportsANSIStyling: bool,
 }
-ExceptionBreakpointsFilter :: struct {
+ExceptionBreakpointsFilter :: struct #packed {
     filter: string,
     label: string,
     description: Maybe(string),
     default: Maybe(bool),
-     supportsCondition: Maybe(bool),
-     conditionDescription: Maybe(string),
+    supportsCondition: Maybe(bool),
+    conditionDescription: Maybe(string),
 }
-ColumnDescriptor :: struct {
+ColumnDescriptor :: struct #packed {
     attributeName: string,
     label: string,
     format: Maybe(string),
     //type?: 'string' | 'number' | 'boolean' | 'unixTimestampUTC';
     width: Maybe(number),
 }
-BreakpointMode :: struct {
+BreakpointMode :: struct #packed {
     mode: string,
     label: string,
     description: Maybe(string),
@@ -277,6 +308,20 @@ Source :: struct #packed {
     //checksums: Maybe([]Checksum),
 }
 
+SourceBreakpoints :: struct #packed {
+    source: Source,
+    breakpoints: Maybe([]SourceBreakpoint) `json:"breakpoints,omitempty"`,
+    sourceModified: Maybe(bool) `json:"sourceModified,omitempty"`,
+}
+
+SourceBreakpoint :: struct #packed {
+    line: number,
+    column: Maybe(number),
+    condition: Maybe(string),
+    hitCondition: Maybe(string),
+    logMessage: Maybe(string),
+    mode: Maybe(string),
+}
 Checksum :: struct #packed {
     algorithm: enum u8 { MD5, SHA1, SHA256, timestamp },
     checksum: string,

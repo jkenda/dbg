@@ -12,7 +12,7 @@ SAVE_FILE_PATH :: "dbg.layout"
 @(private="file") INI_SEPARATOR :: "-------------"
 
 read_and_strip_ini_file :: proc() -> (cstring, uint) {
-    log.info(SAVE_FILE_PATH)
+    log.info("reading layout file")
 
     bytes, ok := os.read_entire_file(SAVE_FILE_PATH)
     if !ok {
@@ -42,7 +42,7 @@ deserialize_ini_extension :: proc(extension: string) {
 }
 
 save_ini_with_extension :: proc(ini_cstring: cstring, ini_len: uint) {
-    log.info(SAVE_FILE_PATH)
+    log.info("saving layout file")
 
     buffer: bytes.Buffer
 

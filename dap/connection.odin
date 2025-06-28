@@ -8,6 +8,7 @@ import "core:net"
 import "core:fmt"
 import "core:log"
 import "core:io"
+import "core:time"
 
 import "../dap"
 
@@ -88,11 +89,9 @@ disconnect :: proc(conn: ^Connection, allocator := context.allocator) -> bool {
 }
 
 disconnect_stdio :: proc(conn: ^Connection_Stdio, allocator := context.allocator) -> bool {
-    log.info("shutting down debug adapter")
+    log.info("disconnecting debug adapter")
     write_message(conn, Arguments_Disconnect{})
     disconnect_request_seq := conn.seq
-
-    log.info("waiting for shutdown")
 
     ok := true
     response: Protocol_Message
@@ -115,22 +114,24 @@ disconnect_stdio :: proc(conn: ^Connection_Stdio, allocator := context.allocator
             // ignore
         }
     }
+    log.info("debug adapter disconnected")
+    log.info("waiting for debugger to shut down")
 
     wait_process: if ok {
-        state, err := os2.process_wait(conn.process)
+        state, err := os2.process_wait(conn.process, 2 * time.Second)
         if err != nil {
             ok = false
             break wait_process
         }
-        log.info("shutdown successful")
+        log.info("debugger shut down")
     }
 
     os2.close(conn.stdin)
     os2.close(conn.stdout)
 
     if !ok {
-        log.warn("unexpected message:", response, "; killing process")
-        assert(os2.process_kill(conn.process) != nil)
+        log.warn("debugger did not stop. killing now")
+        assert(os2.process_kill(conn.process) == nil)
     }
     return ok
 }
@@ -175,6 +176,10 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .initialize
         case Arguments_Launch:
             return .launch
+        case Arguments_SetBreakpoints:
+            return .setBreakpoints
+        case Arguments_ConfigurationDone:
+            return .configurationDone
         case Arguments_Disconnect:
             return .disconnect
         case Arguments_Terminate:

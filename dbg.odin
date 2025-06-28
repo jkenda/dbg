@@ -24,13 +24,16 @@ main :: proc() {
         context.logger = log.create_console_logger(.Info)
     }
 
+    log.info("initializing SDL")
     window := init_SDL()
     defer sdl.Quit()
     defer sdl.DestroyWindow(window)
 
+    log.info("initializing OpenGL")
     gl_ctx := init_openGL(window)
     defer sdl.GL_DeleteContext(gl_ctx)
 
+    log.info("initializing ImGui")
     io := init_ImGui(window, gl_ctx)
     defer im.DestroyContext()
     defer imgui_impl_sdl2.Shutdown()
@@ -184,6 +187,11 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                     debugger_capabilities = m.body.(dap.Body_Initialized)
                     debugger_initialized = true
 
+                case .setBreakpoints:
+                    log.warn("response not implemented:", m)
+                case .configurationDone:
+                    log.info("configuration done")
+
                 case ._unknown:
                     log.warn("response not implemented:", m)
                 case:
@@ -196,7 +204,7 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                     append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
                 case .process:
                     body := m.body.(dap.Body_Process)
-                    log.info("new process:", body.name)
+                    log.info("new process:", body)
 
                     append(&data.processes, Process{
                         name = strings.clone(body.name),
@@ -210,6 +218,8 @@ handle_DAP_messages :: proc(connection: ^dap.Connection) {
                 case .exited, .terminated:
                     log.info("debugee exited")
                     state = .Initializing
+                case .stopped:
+                    log.info("stopped:", m.body)
 
                 case ._unknown:
                     log.warn("event not implemented:", m)
@@ -252,6 +262,20 @@ state_transition :: proc(conn: ^dap.Connection) {
 
         state = .Waiting
     case .SettingBreakpoints:
+        log.info("setting breakpoints")
+
+        for bp in data.breakpoints {
+            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_SetBreakpoints(bp))
+        }
+        state = .ConfigurationDone
+    case .ConfigurationDone:
+        if debugger_capabilities.supportsConfigurationDoneRequest {
+            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_ConfigurationDone{})
+        }
+        else {
+            assert(false, "not supported")
+        }
+        state = .Waiting
     case .Waiting:
 
     case .Running:
@@ -439,6 +463,7 @@ State :: enum {
     SettingExecutable,
     Launching,
     SettingBreakpoints,
+    ConfigurationDone,
     Waiting,
 
     Running,
@@ -465,7 +490,8 @@ data: struct {
         args: [dynamic]u8,
         cwd:  [dynamic]u8
     },
-    processes: [dynamic]Process
+    processes: [dynamic]Process,
+    breakpoints: [dynamic]dap.SourceBreakpoints,
 }
 
 show_exec_dialog: bool
