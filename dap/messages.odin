@@ -28,6 +28,7 @@ Command :: enum u8 {
     initialize,
     launch,
     setBreakpoints,
+    setFunctionBreakpoints,
     configurationDone,
     threads,
     stackTrace,
@@ -56,6 +57,7 @@ Arguments :: union {
     Arguments_Initialize,
     Arguments_Launch,
     Arguments_SetBreakpoints,
+    Arguments_SetFunctionBreakpoints,
     Arguments_ConfigurationDone,
     Arguments_Threads,
     Arguments_StackTrace,
@@ -101,6 +103,10 @@ Arguments_SetBreakpoints :: SourceBreakpoints
 Arguments_ConfigurationDone :: distinct Empty
 Arguments_Threads :: distinct Empty
 
+Arguments_SetFunctionBreakpoints :: struct #packed {
+    breakpoints: []FunctionBreakpoint,
+}
+
 Arguments_StackTrace :: struct #packed {
     threadId: number,
     startFrame: Maybe(number) `json:"startFrame,omitempty"`,
@@ -145,6 +151,7 @@ Response :: struct #packed {
         Body_Threads,
         Body_StackTrace,
         Body_Disassemble,
+        Body_SetFunctionBreakpoints,
 
         Body_Empty,
     },
@@ -193,6 +200,10 @@ DisassembledInstruction :: struct #packed {
     endLine: Maybe(number),
     endColumn: Maybe(number),
     presentationHint: Maybe(enum { normal, invalid }),
+}
+
+Body_SetFunctionBreakpoints :: struct #packed {
+    breakpoints: []Breakpoint,
 }
 
 
@@ -365,6 +376,26 @@ SourceBreakpoints :: struct #packed {
     sourceModified: Maybe(bool) `json:"sourceModified,omitempty"`,
 }
 
+FunctionBreakpoint :: struct #packed {
+    name: string,
+    condition: Maybe(string) `json:"condition,omitempty"`,
+    hitCondition: Maybe(string)`json:"hitCondition,omitempty"`,
+}
+
+Breakpoint :: struct #packed {
+    id: Maybe(number),
+    verified: bool,
+    message: Maybe(string),
+    source: Maybe(Source),
+    line: Maybe(number),
+    column: Maybe(number),
+    endLine: Maybe(number),
+    endColumn: Maybe(number),
+    instructionReference: Maybe(string),
+    offset: Maybe(number),
+    reason: Maybe(enum { pending, failed }),
+}
+
 Thread :: struct #packed {
   id: number,
   name: string,
@@ -382,13 +413,13 @@ StackFrameFormat :: struct #packed {
 StackFrame :: struct #packed {
     id: number,
     name: string,
-    source: Maybe(Source) `json:"source,omitempty"`,
+    source: Maybe(Source),
     line: number,
     column: number,
-    endLine: Maybe(number) `json:"endLine,omitempty"`,
-    endColumn: Maybe(number) `json:"endColumn,omitempty"`,
-    canRestart: Maybe(bool) `json:"canRestart,omitempty"`,
-    instructionPointerReference: Maybe(string) `json:"instructionPointerReference,omitempty"`,
+    endLine: Maybe(number),
+    endColumn: Maybe(number),
+    canRestart: Maybe(bool),
+    instructionPointerReference: Maybe(string),
     moduleId: string,
     presentationHint: Maybe(enum { normal, label, subtle }),
 }

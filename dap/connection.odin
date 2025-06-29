@@ -21,13 +21,11 @@ Connection :: union {
 Connection_Stdio :: struct {
     process: os2.Process,
     stdin, stdout: ^os2.File,
-    buf: [dynamic]u8,
     seq: number,
 }
 
 Connection_Socket :: struct {
     socket: net.TCP_Socket,
-    buf: [dynamic]u8,
     seq: number,
 }
 
@@ -178,6 +176,8 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .launch
         case Arguments_SetBreakpoints:
             return .setBreakpoints
+        case Arguments_SetFunctionBreakpoints:
+            return .setFunctionBreakpoints
         case Arguments_ConfigurationDone:
             return .configurationDone
         case Arguments_Threads:
@@ -233,18 +233,15 @@ read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.a
 
     // parse content length
     content_length := strconv.atoi(string(len_buf[:len]))
-    {
-        context.allocator = allocator
-        resize(&conn.buf, content_length)
-    }
+    buf := make([]u8, content_length, allocator)
 
     // skip the rest of the "\r\n\r\n" pattern
-    io.read(conn.stdout.stream, conn.buf[:3])
-    assert(string(conn.buf[:3]) == "\n\r\n")
+    io.read(conn.stdout.stream, buf[:3])
+    assert(string(buf[:3]) == "\n\r\n")
 
     // read the message
-    io.read(conn.stdout.stream, conn.buf[:])
-    str = string(conn.buf[:])
+    io.read(conn.stdout.stream, buf[:])
+    str = string(buf[:])
     return
 }
 

@@ -189,6 +189,10 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
 
                 case .setBreakpoints:
                     log.warn("response not implemented:", m)
+                case .setFunctionBreakpoints:
+                    body := m.body.(dap.Body_SetFunctionBreakpoints)
+                    log.info("function BPs set:", body.breakpoints)
+
                 case .configurationDone:
                     log.info("configuration done")
                 case .threads:
@@ -300,7 +304,7 @@ state_transition :: proc(conn: ^dap.Connection) {
             program = program,
             args = args,
             cwd = cwd,
-            stopOnEntry = true,
+            stopOnEntry = data.executable.stop_on == .StopOnEntry,
         })
 
         state = .Waiting
@@ -310,6 +314,16 @@ state_transition :: proc(conn: ^dap.Connection) {
         for bp in data.breakpoints {
             dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_SetBreakpoints(bp))
         }
+
+        if data.executable.stop_on == .StopOnMain {
+            // set function BP on main
+            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_SetFunctionBreakpoints{
+                breakpoints = {
+                    { name = "main" }
+                }
+            })
+        }
+
         state = .ConfigurationDone
     case .ConfigurationDone:
         if debugger_capabilities.supportsConfigurationDoneRequest {
@@ -374,6 +388,14 @@ show_GUI :: proc(window: ^sdl.Window) {
                 im.InputTextWithHint("CWD", "Current working directory", cstr_buf, cap(data.executable.cwd))
                 resize(&data.executable.cwd, len(cstr_buf))
             }
+
+            stop_on := i32(data.executable.stop_on)
+            if im.RadioButtonIntPtr("Don't stop"   , &stop_on, i32(views.StopOn.None)) ||
+               im.RadioButtonIntPtr("Stop on entry", &stop_on, i32(views.StopOn.StopOnEntry)) ||
+               im.RadioButtonIntPtr("Stop on main" , &stop_on, i32(views.StopOn.StopOnMain)) {
+                   data.executable.stop_on = views.StopOn(stop_on)
+            }
+
             im.End()
         }
     }

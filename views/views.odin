@@ -61,11 +61,18 @@ DasmLine :: struct {
     instr: string,
 }
 
+StopOn :: enum u8 {
+    None,
+    StopOnEntry,
+    StopOnMain,
+}
+
 Global_Data :: struct {
     executable: struct {
         program: [dynamic]u8,
         args: [dynamic]u8,
-        cwd:  [dynamic]u8
+        cwd:  [dynamic]u8,
+        stop_on: StopOn
     },
     processes: [dynamic]Process,
     breakpoints: [dynamic]dap.SourceBreakpoints,
