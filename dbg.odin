@@ -191,7 +191,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     log.warn("response not implemented:", m)
                 case .setFunctionBreakpoints:
                     body := m.body.(dap.Body_SetFunctionBreakpoints)
-                    log.info("function BPs set:", body.breakpoints)
+                    log.info("function BPs set")
 
                 case .configurationDone:
                     log.info("configuration done")
@@ -218,7 +218,14 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                         frame.name = strings.clone(stack_frame.name)
                         frame.moduleId = strings.clone(stack_frame.moduleId)
                         if frame.instructionPointerReference != nil {
-                            frame.instructionPointerReference = strings.clone(frame.instructionPointerReference.?)
+                            frame.instructionPointerReference = strings.clone(stack_frame.instructionPointerReference.?)
+                        }
+                        if source, ok := stack_frame.source.?; ok {
+                            source_copy := dap.Source{}
+                            if source.name != nil { source_copy.name = strings.clone(source.name.?) }
+                            if source.path != nil { source_copy.path = strings.clone(source.path.?) }
+                            if source.origin != nil { source_copy.origin = strings.clone(source.origin.?) }
+                            frame.source = source_copy
                         }
                         append(&data.stack_frames, frame)
                     }

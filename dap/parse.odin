@@ -14,7 +14,6 @@ parse_message :: proc(msg_str: string, allocator := context.allocator) -> (msg: 
         seq: number,
         type: Message_Type,
     }
-    log.debug(msg_str)
     json.unmarshal_string(msg_str, &base) or_return
 
     switch base.type {
@@ -303,7 +302,6 @@ parse_set_function_breakpoints_res :: proc(t: ^testing.T) {
 @(test)
 parse_stack_trace_res :: proc(t: ^testing.T) {
     msg, err := parse_message(`{"body":{"stackFrames":[{"column":57,"id":524288,"instructionPointerReference":"0x100016FA8","line":53,"name":"main","source":{"name":"entry_unix.odin","path":"/nix/store/drmvn956ak02rw7ka1q9kpf9amk1zack-odin-dev-2025-01/share/base/runtime/entry_unix.odin"}},{"column":0,"id":524289,"instructionPointerReference":"0x18FD9AB98","line":0,"name":"start"}],"totalFrames":2},"command":"stackTrace","request_seq":6,"seq":0,"success":true,"type":"response"}`, t._log_allocator)
-    //a := "{\"body\":{\"stackFrames\":[{\"column\":57,\"id\":524288,\"instructionPointerReference\":\"0x100016FA8\",\"line\":53,\"name\":\"main\",\"sourcecolumn\0id\0instructionPointerReference\00x100016FA8\0line\0name\0main\0sourcecolumnck-odin-dev-2025-01/share/base/runtime/entry_unix.odin\"}},{\"column\":0,\"id\":524289,\"instructionPointerReference\":\"0x18FD9AB98\",\"line\":0,\"name\":\"start\"}],\"totalFrames\":2},\"command\":\"stackTrace\",\"request_seq\":6,\"seq\":0,\"success\":true,\"type\":\"response\"}"
 
     testing.expect_value(t, err, nil)
     log.debug(msg.(Response).body)

@@ -1,13 +1,16 @@
 package views
 
 import im "../odin-imgui"
-import "core:strconv"
+import "../dap"
+
+import "core:fmt"
+import "core:log"
 
 show_stack_view :: proc(data: Global_Data) {
     if (im.BeginTable("Stack Trace", 3, im.TableFlags_Resizable)) {
         im.TableSetupColumn("Address" , {.WidthStretch})
         im.TableSetupColumn("Function", {.WidthStretch})
-        im.TableSetupColumn("Line"    , {.WidthStretch})
+        im.TableSetupColumn("Location", {.WidthStretch})
 
         im.TableHeadersRow()
 
@@ -20,12 +23,12 @@ show_stack_view :: proc(data: Global_Data) {
             im.TableNextColumn()
             im.Text(cstring(raw_data(frame.name)))
 
+            im.TableNextColumn()
             {
-                buf: [64]u8
-                strconv.itoa(buf[:], int(frame.line))
-
-                im.TableNextColumn()
-                im.Text(cstring(raw_data(buf[:])))
+                context.allocator = context.temp_allocator
+                im.Text(fmt.caprintf("{}:{}:{}",
+                        frame.source != nil ? frame.source.(dap.Source).name.? or_else "" : "",
+                        frame.line, frame.column))
             }
         }
 
