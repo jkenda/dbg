@@ -370,7 +370,9 @@ new_frame :: proc() {
 }
 
 show_GUI :: proc(window: ^sdl.Window) {
-    show_main_window(window)
+    if state > State.SettingExecutable {
+        show_main_window(window)
+    }
 
     if show_exec_dialog {
         if im.Begin("Executable", &show_exec_dialog, { .NoDocking, }) {
