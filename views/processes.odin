@@ -6,7 +6,7 @@ import "../dap"
 import "core:strconv"
 import "core:mem"
 
-show_processes_view :: proc(view_data: Runtime_View_Data) {
+show_processes_view :: proc(view_data: ^Runtime_View_Data) {
     if len(runtime_data.processes.data) > 0 {
         if (im.BeginTable("Processes", 3, im.TableFlags_Resizable)) {
             im.TableSetupColumn("PID"  , {.WidthStretch})

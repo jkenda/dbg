@@ -6,7 +6,7 @@ import "../dap"
 import "core:fmt"
 import "core:log"
 
-show_stack_view :: proc(view_data: Runtime_View_Data) {
+show_stack_view :: proc(view_data: ^Runtime_View_Data) {
     #partial switch d in view_data.data {
     case []dap.StackFrame:
         if (im.BeginTable("Stack Trace", 3, im.TableFlags_Resizable)) {

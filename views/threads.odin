@@ -4,7 +4,7 @@ import im "../odin-imgui"
 import "../dap"
 import "core:strconv"
 
-show_threads_view :: proc(view_data: Runtime_View_Data) {
+show_threads_view :: proc(view_data: ^Runtime_View_Data) {
     #partial switch d in view_data.data {
     case []dap.Thread:
         if (im.BeginTable("Threads", 2, im.TableFlags_Resizable)) {

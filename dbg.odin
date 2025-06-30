@@ -224,11 +224,14 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     stack_frame := body.stackFrames[0]
 
                     if source, ok := stack_frame.source.?; ok {
-                        views_data := &views.runtime_data.view_data[.Source]
-                        if len(views_data) < 1 {
-                            resize(views_data, 1)
+                        {
+                            views_data := &views.runtime_data.view_data[.Source]
+                            if len(views_data) < 1 {
+                                resize(views_data, 1)
+                            }
                         }
                         view_data := &views.runtime_data.view_data[.Source][0]
+                        view_data.first = true
 
                         switch s in source.path {
                         case nil:
@@ -546,11 +549,11 @@ show_main_window :: proc(window: ^sdl.Window) {
                     resize(views_data, 1)
                     resize(rt_views_data, 1)
 
-                    views.show_view(view_type, &views_data[0], rt_views_data[0])
+                    views.show_view(view_type, &views_data[0], &rt_views_data[0])
                 }
                 else {
                     for &v, i in soa_zip(data=views_data[:], rt_data=rt_views_data[:]) {
-                        views.show_view(view_type, &v.data, v.rt_data)
+                        views.show_view(view_type, &v.data, &v.rt_data)
                     }
                 }
 

@@ -28,7 +28,7 @@ View_Names: [View_Type]cstring = {
     .Stack_Trace = "Stack Trace"
 }
 
-view_show_proc: [View_Type]proc(Runtime_View_Data) = {
+view_show_proc: [View_Type]proc(^Runtime_View_Data) = {
     .Output      = show_output_view,
     .Source      = show_source_view,
     .Watch       = show_watch_view,
@@ -46,6 +46,8 @@ View_Data :: struct {
 
 Runtime_View_Data :: struct #packed {
     arena: vmem.Arena,
+    first: bool,
+
     data: union {
         string,
         []dap.Thread,
@@ -91,7 +93,7 @@ delete_data :: proc() {
     delete(runtime_data.output)
 }
 
-show_view :: proc(view_type: View_Type, view_data: ^View_Data, rt_views_data: Runtime_View_Data) {
+show_view :: proc(view_type: View_Type, view_data: ^View_Data, rt_views_data: ^Runtime_View_Data) {
     if !view_data.show { return }
 
     name := View_Names[view_type] if view_type in singletons else

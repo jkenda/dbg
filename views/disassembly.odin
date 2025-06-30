@@ -3,7 +3,7 @@ package views
 import im "../odin-imgui"
 import "../dap"
 
-show_dasm_view :: proc(view_data: Runtime_View_Data) {
+show_dasm_view :: proc(view_data: ^Runtime_View_Data) {
     #partial switch d in view_data.data {
     case []dap.DisassembledInstruction:
         if (im.BeginTable("Threads", 2, im.TableFlags_Resizable)) {
