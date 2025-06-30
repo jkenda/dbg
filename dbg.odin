@@ -75,7 +75,7 @@ init_debugger :: proc() -> dap.Connection {
     assert(err == nil, strings.clone_from(sdl.GetError()))
 
     { // initialize debugger
-        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Initialize{
+        dap.write_message(&conn, dap.Arguments_Initialize{
             clientID = "dbg",
             adapterID = "gdb",
             linesStartAt1 = true,
@@ -206,7 +206,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                         })
                     }
 
-                    dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_StackTrace{
+                    dap.write_message(conn, dap.Arguments_StackTrace{
                         threadId = data.threads[0].id
                     })
                 case .stackTrace:
@@ -231,7 +231,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     }
 
                     if data.stack_frames[0].instructionPointerReference != nil {
-                        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Disassemble{
+                        dap.write_message(conn, dap.Arguments_Disassemble{
                             memoryReference = data.stack_frames[0].instructionPointerReference.?,
                             //instructionOffset = -4,
                             instructionCount = 100,
@@ -248,6 +248,8 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                             instr   = strings.clone(instr.instruction),
                         })
                     }
+                case .next:
+                    log.info("next: ack")
 
                 case ._unknown:
                     log.warn("response not implemented:", m)
@@ -307,7 +309,7 @@ state_transition :: proc(conn: ^dap.Connection) {
         cwd := string(data.executable.cwd[:])
 
         log.info("launching program ", program, "with args", args, "in cwd", cwd)
-        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Launch{
+        dap.write_message(conn, dap.Arguments_Launch{
             program = program,
             args = args,
             cwd = cwd,
@@ -319,12 +321,12 @@ state_transition :: proc(conn: ^dap.Connection) {
         log.info("setting breakpoints")
 
         for bp in data.breakpoints {
-            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_SetBreakpoints(bp))
+            dap.write_message(conn, dap.Arguments_SetBreakpoints(bp))
         }
 
         if data.executable.stop_on == .StopOnMain {
             // set function BP on main
-            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_SetFunctionBreakpoints{
+            dap.write_message(conn, dap.Arguments_SetFunctionBreakpoints{
                 breakpoints = {
                     { name = "main" }
                 }
@@ -334,7 +336,7 @@ state_transition :: proc(conn: ^dap.Connection) {
         state = .ConfigurationDone
     case .ConfigurationDone:
         if debugger_capabilities.supportsConfigurationDoneRequest {
-            dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_ConfigurationDone{})
+            dap.write_message(conn, dap.Arguments_ConfigurationDone{})
         }
         else {
             assert(false, "not supported")
@@ -342,11 +344,23 @@ state_transition :: proc(conn: ^dap.Connection) {
         state = .Waiting
     case .Waiting:
 
+    case .Resetting:
+        unimplemented()
+    case .Starting:
+        unimplemented()
     case .Running:
+        unimplemented()
+    case .Stopping:
+        unimplemented()
     case .Stopped:
-        dap.write_message(&conn.(dap.Connection_Stdio), dap.Arguments_Threads{})
-
+        dap.write_message(conn, dap.Arguments_Threads{})
         state = .Waiting
+    case .SteppingOver:
+        dap.write_message(conn, dap.Arguments_Next{ threadId = data.threads[0].id })
+        state = .Waiting
+    case .SteppingInto:
+        unimplemented()
+    case .SteppingOut:
     case .Error:
     case .Exiting:
     }
@@ -491,12 +505,12 @@ show_main_window :: proc(window: ^sdl.Window) {
             }
 
             im.Separator()
-            im.MenuItem("Run", "F5")
-            im.MenuItem("Reset", "SHIFT+F5")
-            im.MenuItem("Pause", "F6")
-            im.MenuItem("Step Over", "F10")
-            im.MenuItem("Step Into", "F11")
-            im.MenuItem("Step Out", "SHIFT+F11")
+            if im.MenuItem("Run", "F5")             do state = .Starting
+            if im.MenuItem("Stop", "F6")            do state = .Stopping
+            if im.MenuItem("Reset", "SHIFT+F5")     do state = .Resetting
+            if im.MenuItem("Step Over", "F10")      do state = .SteppingOver
+            if im.MenuItem("Step Into", "F11")      do state = .SteppingInto
+            if im.MenuItem("Step Out", "SHIFT+F11") do state = .SteppingOut
             im.Separator()
 
             when ODIN_DEBUG {
@@ -542,8 +556,14 @@ State :: enum {
     ConfigurationDone,
     Waiting,
 
+    Resetting,
+    Starting,
     Running,
+    Stopping,
     Stopped,
+    SteppingOver,
+    SteppingInto,
+    SteppingOut,
 
     Error,
     Exiting,

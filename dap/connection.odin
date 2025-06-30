@@ -186,6 +186,8 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .stackTrace
         case Arguments_Disassemble:
             return .disassemble
+        case Arguments_Next:
+            return .next
         case Arguments_Disconnect:
             return .disconnect
         case Arguments_Terminate:
@@ -204,9 +206,21 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
     return write_message_msg(conn, &msg)
 }
 
+write_message_request_stdio :: proc(conn: ^Connection, args: Arguments) -> (err: json.Marshal_Error) {
+    switch &c in conn {
+    case Connection_Stdio:
+        return write_message_request(&c, args)
+    case Connection_Socket:
+        unimplemented()
+    }
+
+    return nil
+}
+
 write_message :: proc {
     write_message_msg,
     write_message_request,
+    write_message_request_stdio,
 }
 
 @(private)

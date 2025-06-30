@@ -33,6 +33,7 @@ Command :: enum u8 {
     threads,
     stackTrace,
     disassemble,
+    next,
     disconnect,
     terminate,
 }
@@ -62,6 +63,7 @@ Arguments :: union {
     Arguments_Threads,
     Arguments_StackTrace,
     Arguments_Disassemble,
+    Arguments_Next,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -120,6 +122,12 @@ Arguments_Disassemble :: struct #packed {
     instructionOffset: Maybe(number),
     instructionCount: Maybe(number),
     resolveSymbols: Maybe(bool),
+}
+
+Arguments_Next :: struct #packed {
+    threadId: number,
+    singleThread: Maybe(bool) `json:"singleThread,omitempty"`,
+    granularity: Maybe(SteppingGranularity) `json:"granularity,omitempty"`,
 }
 
 Arguments_Disconnect :: struct #packed {
@@ -435,4 +443,10 @@ SourceBreakpoint :: struct #packed {
 Checksum :: struct #packed {
     algorithm: enum u8 { MD5, SHA1, SHA256, timestamp },
     checksum: string,
+}
+
+SteppingGranularity :: enum u8 {
+    statement,
+    line,
+    instruction,
 }
