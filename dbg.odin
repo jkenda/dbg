@@ -11,6 +11,7 @@ import "core:strings"
 import "core:fmt"
 import "core:log"
 import "core:os"
+import vmem "core:mem/virtual"
 
 import "views"
 import "dap"
@@ -169,7 +170,8 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
 
 handle_DAP_messages :: proc(conn: ^dap.Connection) {
     for {
-        msg, err := dap.read_message(&conn.(dap.Connection_Stdio), allocator = context.temp_allocator)
+        arena: vmem.Arena
+        msg, err := dap.read_message(&conn.(dap.Connection_Stdio), allocator = vmem.arena_allocator(&arena))
         if err == .Empty_Input do break
 
         switch err {
@@ -177,78 +179,70 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
             switch m in msg {
             case dap.Request:
                 log.warn("unexpected - got request:", m)
+                vmem.arena_destroy(&arena)
             case dap.Response:
                 switch m.command {
                 case .cancel, .disconnect, .terminate:
-                    unreachable()
+                    vmem.arena_destroy(&arena)
                 case .launch:
                     log.info("program launched")
+                    vmem.arena_destroy(&arena)
                 case .initialize:
                     log.info("debugger initialized. ready for 'launch'")
                     debugger_capabilities = m.body.(dap.Body_Initialized)
                     debugger_initialized = true
+                    vmem.arena_destroy(&arena)
 
                 case .setBreakpoints:
                     log.warn("response not implemented:", m)
+                    vmem.arena_destroy(&arena)
                 case .setFunctionBreakpoints:
-                    body := m.body.(dap.Body_SetFunctionBreakpoints)
                     log.info("function BPs set")
-
+                    vmem.arena_destroy(&arena)
                 case .configurationDone:
                     log.info("configuration done")
+                    vmem.arena_destroy(&arena)
                 case .threads:
-                    clear(&data.threads)
+                    view_data := &views.runtime_data.view_data[.Threads][0]
+                    vmem.arena_destroy(&view_data.arena)
+                    view_data.arena = arena
 
                     body := m.body.(dap.Body_Threads)
-                    for thread in body.threads {
-                        append(&data.threads, dap.Thread{
-                            name = strings.clone(thread.name),
-                            id = thread.id,
-                        })
-                    }
+                    view_data.data = body.threads
 
                     dap.write_message(conn, dap.Arguments_StackTrace{
-                        threadId = data.threads[0].id
+                        threadId = body.threads[0].id
                     })
                 case .stackTrace:
+                    view_data := &views.runtime_data.view_data[.Stack_Trace][0]
+                    vmem.arena_destroy(&view_data.arena)
+                    view_data.arena = arena
+
                     body := m.body.(dap.Body_StackTrace)
+                    view_data.data = body.stackFrames
 
-                    clear(&data.stack_frames)
-                    for stack_frame in body.stackFrames {
-                        frame := stack_frame
-                        frame.name = strings.clone(stack_frame.name)
-                        frame.moduleId = strings.clone(stack_frame.moduleId)
-                        if frame.instructionPointerReference != nil {
-                            frame.instructionPointerReference = strings.clone(stack_frame.instructionPointerReference.?)
+                    stack_frame := body.stackFrames[0]
+
+                    if source, ok := stack_frame.source.?; ok {
+                        views_data := &views.runtime_data.view_data[.Source]
+                        if len(views_data) < 1 {
+                            resize(views_data, 1)
                         }
-                        if source, ok := stack_frame.source.?; ok {
-                            source_copy := dap.Source{}
-                            if source.name != nil { source_copy.name = strings.clone(source.name.?) }
-                            if source.path != nil { source_copy.path = strings.clone(source.path.?) }
-                            if source.origin != nil { source_copy.origin = strings.clone(source.origin.?) }
-                            frame.source = source_copy
-                        }
-                        append(&data.stack_frames, frame)
-                    }
+                        view_data := &views.runtime_data.view_data[.Source][0]
 
-                    if source, ok := data.stack_frames[0].source.?; ok {
-                        if len(views.data[.Source]) > 0 {
-                            if str, ok := views.data[.Source][0].string.?; ok {
-                                delete(str)
-                            }
-
-                            switch s in source.path {
-                            case nil:
-                            case string:
-                                data := os.read_entire_file(s) or_else nil
-                                views.data[.Source][0].string = string(data)
-                            }
+                        switch s in source.path {
+                        case nil:
+                            vmem.arena_destroy(&view_data.arena)
+                            view_data.data = nil
+                        case string:
+                            data := os.read_entire_file(s) or_else nil
+                            view_data.data = string(data)
                         }
                     }
 
-                    if data.stack_frames[0].instructionPointerReference != nil {
+                    if stack_frame.instructionPointerReference != nil {
                         dap.write_message(conn, dap.Arguments_Disassemble{
-                            memoryReference = data.stack_frames[0].instructionPointerReference.?,
+                            memoryReference = stack_frame.instructionPointerReference.?,
                             //instructionOffset = -4,
                             instructionCount = 100,
                             resolveSymbols = true,
@@ -256,47 +250,48 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     }
 
                 case .disassemble:
+                    view_data := &views.runtime_data.view_data[.Disassembly][0]
+                    vmem.arena_destroy(&view_data.arena)
+                    view_data.arena = arena
+
                     body := m.body.(dap.Body_Disassemble)
-                    clear(&data.disassembly)
-                    for instr in body.instructions {
-                        append(&data.disassembly, views.DasmLine{
-                            address = strings.clone(instr.address),
-                            instr   = strings.clone(instr.instruction),
-                        })
-                    }
+                    view_data.data = body.instructions
                 case .next:
                     log.info("next: ack")
+                    vmem.arena_destroy(&arena)
 
                 case ._unknown:
                     log.warn("response not implemented:", m)
+                    vmem.arena_destroy(&arena)
                 }
             case dap.Event:
                 switch m.event {
                 case .output:
                     log.debug("output:", strings.trim_space(m.body.(dap.Body_OutputEvent).output))
                     append(&views.runtime_data.output, m.body.(dap.Body_OutputEvent).output)
+                    vmem.arena_destroy(&arena)
                 case .process:
+                    processes := &views.runtime_data.processes
                     body := m.body.(dap.Body_Process)
-                    log.info("new process:", body)
 
-                    append(&data.processes, views.Process{
-                        name = strings.clone(body.name),
-                        pid = int(body.systemProcessId.? or_else 0),
-                        local = body.isLocalProcess.? or_else true,
-                        start_method = body.startMethod.? or_else .launch,
-                    })
+                    append(&processes.data, body)
+                    append(&processes.arenas, arena)
                 case .initialized:
                     log.info("program initialized. ready for 'setBreakpoint'")
                     state = .SettingBreakpoints
+                    vmem.arena_destroy(&arena)
                 case .exited, .terminated:
                     log.info("debugee exited")
                     state = .Initializing
+                    vmem.arena_destroy(&arena)
                 case .stopped:
                     log.info("stopped:", m.body)
                     state = .Stopped
+                    vmem.arena_destroy(&arena)
 
                 case ._unknown:
                     log.warn("event not implemented:", m)
+                    vmem.arena_destroy(&arena)
                 }
             }
         case:
@@ -372,7 +367,9 @@ state_transition :: proc(conn: ^dap.Connection) {
         dap.write_message(conn, dap.Arguments_Threads{})
         state = .Waiting
     case .SteppingOver:
-        dap.write_message(conn, dap.Arguments_Next{ threadId = data.threads[0].id })
+        view_data := &views.runtime_data.view_data[.Threads][0]
+        data := view_data.data.([]dap.Thread)
+        dap.write_message(conn, dap.Arguments_Next{ threadId = data[0].id })
         state = .Waiting
     case .SteppingInto:
         unimplemented()
@@ -497,6 +494,7 @@ show_main_window :: proc(window: ^sdl.Window) {
                     type_name := views.View_Names[view_type]
                     if view_type in views.singletons {
                         resize(&views.data[view_type], 1)
+                        resize(&views.runtime_data.view_data[view_type], 1)
                         im.MenuItemBoolPtr(type_name, nil, &views.data[view_type][0].show)
                     }
                     else {
@@ -541,13 +539,18 @@ show_main_window :: proc(window: ^sdl.Window) {
 
         { // show views
             for view_type in views.View_Type {
+                views_data := &views.data[view_type]
+                rt_views_data := &views.runtime_data.view_data[view_type]
+
                 if view_type in views.singletons {
-                    resize(&views.data[view_type], 1)
-                    views.show_view(view_type, &views.data[view_type][0], data)
+                    resize(views_data, 1)
+                    resize(rt_views_data, 1)
+
+                    views.show_view(view_type, &views_data[0], rt_views_data[0])
                 }
                 else {
-                    for &view_data in views.data[view_type] {
-                        views.show_view(view_type, &view_data, data)
+                    for &v, i in soa_zip(data=views_data[:], rt_data=rt_views_data[:]) {
+                        views.show_view(view_type, &v.data, v.rt_data)
                     }
                 }
 

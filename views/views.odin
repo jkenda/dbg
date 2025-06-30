@@ -1,8 +1,10 @@
 package views
 
 import im "../odin-imgui"
-import "core:strings"
 import "../dap"
+
+import "core:strings"
+import vmem "core:mem/virtual"
 
 View_Type :: enum {
     Output,
@@ -26,7 +28,7 @@ View_Names: [View_Type]cstring = {
     .Stack_Trace = "Stack Trace"
 }
 
-view_show_proc: [View_Type]proc(Global_Data, View_Data) = {
+view_show_proc: [View_Type]proc(Runtime_View_Data) = {
     .Output      = show_output_view,
     .Source      = show_source_view,
     .Watch       = show_watch_view,
@@ -40,28 +42,30 @@ view_show_proc: [View_Type]proc(Global_Data, View_Data) = {
 View_Data :: struct {
     name: string,
     show: bool,
+}
 
-    string: Maybe(string),
+Runtime_View_Data :: struct #packed {
+    arena: vmem.Arena,
+    data: union {
+        string,
+        []dap.Thread,
+        []dap.StackFrame,
+        []dap.DisassembledInstruction,
+    },
 }
 
 runtime_data: struct {
-    output: [dynamic]u8
+    output: [dynamic]u8,
+    processes: struct {
+        data: [dynamic]dap.Process,
+        arenas: [dynamic]vmem.Arena,
+    },
+
+    view_data: [View_Type][dynamic]Runtime_View_Data,
 }
 
 singletons: bit_set[View_Type] : { .Output, .Disassembly, .Processes, .Threads, .Stack_Trace }
 data: [View_Type][dynamic]View_Data
-
-Process :: struct {
-    name: string,
-    pid: int,
-    local: bool,
-    start_method: dap.StartMethod
-}
-
-DasmLine :: struct {
-    address: string,
-    instr: string,
-}
 
 StopOn :: enum u8 {
     None,
@@ -76,11 +80,7 @@ Global_Data :: struct {
         cwd:  [dynamic]u8,
         stop_on: StopOn
     },
-    processes: [dynamic]Process,
     breakpoints: [dynamic]dap.SourceBreakpoints,
-    threads: [dynamic]dap.Thread,
-    stack_frames: [dynamic]dap.StackFrame,
-    disassembly: [dynamic]DasmLine,
 }
 
 init_data :: proc() {
@@ -91,7 +91,7 @@ delete_data :: proc() {
     delete(runtime_data.output)
 }
 
-show_view :: proc(view_type: View_Type, view_data: ^View_Data, data: Global_Data) {
+show_view :: proc(view_type: View_Type, view_data: ^View_Data, rt_views_data: Runtime_View_Data) {
     if !view_data.show { return }
 
     name := View_Names[view_type] if view_type in singletons else
@@ -101,7 +101,7 @@ show_view :: proc(view_type: View_Type, view_data: ^View_Data, data: Global_Data
     {
         show_proc := view_show_proc[view_type]
         if show_proc != nil {
-            show_proc(data, view_data^)
+            show_proc(rt_views_data)
         }
     }
     im.End()

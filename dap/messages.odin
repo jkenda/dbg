@@ -258,18 +258,7 @@ Body_OutputEvent :: struct #packed {
     locationReference: Maybe(number) `json:"locationReference,omitempty"`,
 }
 
-Body_Process :: struct #packed {
-    name: string,
-    systemProcessId: Maybe(number) `json:"systemProcessId,omitempty"`,
-    isLocalProcess: Maybe(bool) `json:"isLocalProcess,omitempty"`,
-    startMethod: Maybe(StartMethod) `json:"startMethod,omitempty"`,
-    pointerSize: Maybe(number) `json:"pointerSize,omitempty"`,
-}
-StartMethod :: enum u8 {
-    launch,
-    attach,
-    attachForSuspendedLaunch,
-}
+Body_Process :: Process
 
 Body_Exited :: struct #packed {
     exitCode: number,
@@ -307,16 +296,16 @@ Capabilities :: struct #packed {
     supportsConditionalBreakpoints: bool,
     supportsHitConditionalBreakpoints: bool,
     supportsEvaluateForHovers: bool,
-    //exceptionBreakpointFilters: [dynamic]ExceptionBreakpointsFilter,
+    //exceptionBreakpointFilters: []ExceptionBreakpointsFilter,
     supportsStepBack: bool,
     supportsSetVariable: bool,
     supportsRestartFrame: bool,
     supportsGotoTargetsRequest: bool,
     supportsStepInTargetsRequest: bool,
     supportsCompletionsRequest: bool,
-    //completionTriggerCharacters: [dynamic]string,
+    //completionTriggerCharacters: []string,
     supportsModulesRequest: bool,
-    //additionalModuleColumns: [dynamic]ColumnDescriptor,
+    //additionalModuleColumns: []ColumnDescriptor,
     supportedChecksumAlgorithms: string,
     supportsRestartRequest: bool,
     supportsExceptionOptions: bool,
@@ -342,7 +331,7 @@ Capabilities :: struct #packed {
     supportsExceptionFilterOptions: bool,
     supportsSingleThreadExecutionRequests: bool,
     supportsDataBreakpointBytes: bool,
-    //breakpointModes: [dynamic]BreakpointMode,
+    //breakpointModes: []BreakpointMode,
     supportsANSIStyling: bool,
 }
 ExceptionBreakpointsFilter :: struct #packed {
@@ -376,6 +365,19 @@ Source :: struct #packed {
     //sources: Maybe([]Source),
     //adapterData: Maybe(any),
     //checksums: Maybe([]Checksum),
+}
+
+Process :: struct #packed {
+    name: string,
+    systemProcessId: Maybe(number) `json:"systemProcessId,omitempty"`,
+    isLocalProcess: Maybe(bool) `json:"isLocalProcess,omitempty"`,
+    startMethod: Maybe(StartMethod) `json:"startMethod,omitempty"`,
+    pointerSize: Maybe(number) `json:"pointerSize,omitempty"`,
+}
+StartMethod :: enum u8 {
+    launch,
+    attach,
+    attachForSuspendedLaunch,
 }
 
 SourceBreakpoints :: struct #packed {
