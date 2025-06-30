@@ -256,6 +256,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     view_data := &views.runtime_data.view_data[.Disassembly][0]
                     vmem.arena_destroy(&view_data.arena)
                     view_data.arena = arena
+                    view_data.first = true
 
                     body := m.body.(dap.Body_Disassemble)
                     view_data.data = body.instructions
