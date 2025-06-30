@@ -7,11 +7,12 @@ import "odin-imgui/imgui_impl_opengl3"
 import sdl "vendor:sdl2"
 import gl "vendor:OpenGL"
 
+import vmem "core:mem/virtual"
 import "core:strings"
+import "core:slice"
 import "core:fmt"
 import "core:log"
 import "core:os"
-import vmem "core:mem/virtual"
 
 import "views"
 import "dap"
@@ -243,13 +244,28 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                         }
                     }
 
-                    if stack_frame.instructionPointerReference != nil {
-                        dap.write_message(conn, dap.Arguments_Disassemble{
-                            memoryReference = stack_frame.instructionPointerReference.?,
-                            //instructionOffset = -4,
-                            instructionCount = 100,
-                            resolveSymbols = true,
-                        })
+                    if stack_instr, ok := stack_frame.instructionPointerReference.?; ok {
+                        dasm_data := &views.runtime_data.view_data[.Disassembly][0]
+                        dasm_data.first = true
+
+                        contains_addr := false
+                        if dasm_data.data != nil {
+                            for dasm_instr in dasm_data.data.([]dap.DisassembledInstruction) {
+                                if stack_instr != dasm_instr.address { continue }
+
+                                contains_addr = true
+                                break
+                            }
+                        }
+
+                        if !contains_addr {
+                            dap.write_message(conn, dap.Arguments_Disassemble{
+                                memoryReference = stack_frame.instructionPointerReference.?,
+                                instructionOffset = -4,
+                                instructionCount = 100,
+                                resolveSymbols = true,
+                            })
+                        }
                     }
 
                 case .disassemble:
