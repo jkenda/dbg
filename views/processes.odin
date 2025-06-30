@@ -3,7 +3,7 @@ package views
 import im "../odin-imgui"
 import "core:strconv"
 
-show_processes_view :: proc(data: Global_Data) {
+show_processes_view :: proc(data: Global_Data, view_data: View_Data) {
     if (im.BeginTable("Processes", 3, im.TableFlags_Resizable)) {
         im.TableSetupColumn("PID"  , {.WidthStretch})
         im.TableSetupColumn("Name" , {.WidthStretch})

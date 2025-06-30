@@ -26,7 +26,7 @@ View_Names: [View_Type]cstring = {
     .Stack_Trace = "Stack Trace"
 }
 
-view_show_proc: [View_Type]proc(Global_Data) = {
+view_show_proc: [View_Type]proc(Global_Data, View_Data) = {
     .Output      = show_output_view,
     .Source      = show_source_view,
     .Watch       = show_watch_view,
@@ -40,6 +40,8 @@ view_show_proc: [View_Type]proc(Global_Data) = {
 View_Data :: struct {
     name: string,
     show: bool,
+
+    string: Maybe(string),
 }
 
 runtime_data: struct {
@@ -99,7 +101,7 @@ show_view :: proc(view_type: View_Type, view_data: ^View_Data, data: Global_Data
     {
         show_proc := view_show_proc[view_type]
         if show_proc != nil {
-            show_proc(data)
+            show_proc(data, view_data^)
         }
     }
     im.End()

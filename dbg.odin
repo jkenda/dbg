@@ -10,6 +10,7 @@ import gl "vendor:OpenGL"
 import "core:strings"
 import "core:fmt"
 import "core:log"
+import "core:os"
 
 import "views"
 import "dap"
@@ -228,6 +229,21 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                             frame.source = source_copy
                         }
                         append(&data.stack_frames, frame)
+                    }
+
+                    if source, ok := data.stack_frames[0].source.?; ok {
+                        if len(views.data[.Source]) > 0 {
+                            if str, ok := views.data[.Source][0].string.?; ok {
+                                delete(str)
+                            }
+
+                            switch s in source.path {
+                            case nil:
+                            case string:
+                                data := os.read_entire_file(s) or_else nil
+                                views.data[.Source][0].string = string(data)
+                            }
+                        }
                     }
 
                     if data.stack_frames[0].instructionPointerReference != nil {

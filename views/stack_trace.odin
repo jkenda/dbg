@@ -6,7 +6,7 @@ import "../dap"
 import "core:fmt"
 import "core:log"
 
-show_stack_view :: proc(data: Global_Data) {
+show_stack_view :: proc(data: Global_Data, view_data: View_Data) {
     if (im.BeginTable("Stack Trace", 3, im.TableFlags_Resizable)) {
         im.TableSetupColumn("Address" , {.WidthStretch})
         im.TableSetupColumn("Function", {.WidthStretch})

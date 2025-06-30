@@ -2,7 +2,7 @@ package views
 
 import im "../odin-imgui"
 
-show_dasm_view :: proc(data: Global_Data) {
+show_dasm_view :: proc(data: Global_Data, view_data: View_Data) {
     if (im.BeginTable("Threads", 2, im.TableFlags_Resizable)) {
         im.TableSetupColumn("Address"    , {.WidthStretch})
         im.TableSetupColumn("Instruction", {.WidthStretch})

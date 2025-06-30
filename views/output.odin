@@ -2,6 +2,6 @@ package views
 
 import im "../odin-imgui"
 
-show_output_view :: proc(data: Global_Data) {
+show_output_view :: proc(data: Global_Data, view_data: View_Data) {
     im.TextWrapped(cstring(raw_data(runtime_data.output[:])))
 }
