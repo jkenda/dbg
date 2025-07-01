@@ -308,10 +308,10 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     body := m.body.(dap.Body_Disassemble)
                     view_data.data = body.instructions
                 case .next:
-                    log.info("next: ack")
                     vmem.arena_destroy(&arena)
                 case .stepIn:
-                    log.info("stepIn: ack")
+                    vmem.arena_destroy(&arena)
+                case .stepOut:
                     vmem.arena_destroy(&arena)
 
                 case ._unknown:
@@ -475,7 +475,10 @@ state_transition :: proc(conn: ^dap.Connection) {
         dap.write_message(conn, dap.Arguments_StepIn{ threadId = data[0].id })
         state = .Waiting
     case .SteppingOut:
-        unimplemented()
+        view_data := &views.runtime_data.view_data[.Threads][0]
+        data := view_data.data.([]dap.Thread)
+        dap.write_message(conn, dap.Arguments_StepOut{ threadId = data[0].id })
+        state = .Waiting
     case .Error:
     case .Exiting:
     }

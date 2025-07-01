@@ -59,6 +59,8 @@ parse_request :: proc(msg_str: string) -> (request: Request, err: Error) {
         request.arguments = parse_arguments(Arguments_Next, msg_str) or_return
     case .stepIn:
         request.arguments = parse_arguments(Arguments_StepIn, msg_str) or_return
+    case .stepOut:
+        request.arguments = parse_arguments(Arguments_StepOut, msg_str) or_return
     case .disconnect:
         request.arguments = parse_arguments(Arguments_Disconnect, msg_str) or_return
     case .terminate:
@@ -77,7 +79,7 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
 
     if response.success {
         switch response.command {
-        case .cancel, .launch, .next, .stepIn, .disconnect, .terminate, .configurationDone:
+        case .cancel, .launch, .next, .stepIn, .stepOut, .disconnect, .terminate, .configurationDone:
             response.body = Body_Ack{}
         case .initialize:
             response.body = parse_body(Body_Initialized, msg_str) or_return
