@@ -118,6 +118,8 @@ parse_event :: proc(msg_str: string) -> (event: Event, err: Error) {
         event.body = parse_body(Body_Terminated, msg_str) or_return
     case .stopped:
         event.body = parse_body(Body_Stopped, msg_str) or_return
+    case .breakpoint:
+        event.body = parse_body(Body_Breakpoint, msg_str) or_return
 
     case nil, ._unknown:
         log.warn("unknown message:", msg_str)

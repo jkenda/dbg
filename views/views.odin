@@ -15,6 +15,7 @@ View_Type :: enum {
     Processes,
     Threads,
     Stack_Trace,
+    Breakpoints,
 }
 
 View_Names: [View_Type]cstring = {
@@ -25,7 +26,8 @@ View_Names: [View_Type]cstring = {
     .Disassembly = "Disassembly",
     .Processes   = "Processes",
     .Threads     = "Threads",
-    .Stack_Trace = "Stack Trace"
+    .Stack_Trace = "Stack Trace",
+    .Breakpoints = "Breakpoints",
 }
 
 view_show_proc: [View_Type]proc(^Runtime_View_Data) = {
@@ -37,6 +39,7 @@ view_show_proc: [View_Type]proc(^Runtime_View_Data) = {
     .Processes   = show_processes_view,
     .Threads     = show_threads_view,
     .Stack_Trace = show_stack_view,
+    .Breakpoints = show_breakpoints_view,
 }
 
 View_Data :: struct {
@@ -44,6 +47,23 @@ View_Data :: struct {
     show: bool,
 }
 
+Line_Breakpoint :: struct #packed {
+    data: dap.Breakpoint,
+    arena: vmem.Arena,
+}
+Function_Breakpoints :: struct #packed {
+    data: []dap.Breakpoint,
+    arena: vmem.Arena,
+}
+Function_Breakpoint :: struct #packed {
+    bps: ^Function_Breakpoints,
+    bp: ^dap.Breakpoint,
+}
+Breakpoints :: struct #packed {
+    line_breakpoints: map[dap.number]Line_Breakpoint,
+    function_breakpoints: Function_Breakpoints,
+    bp_map: map[dap.number]union { ^Line_Breakpoint, ^dap.Breakpoint }
+}
 Runtime_View_Data :: struct #packed {
     arena: vmem.Arena,
     first: bool,
@@ -53,6 +73,7 @@ Runtime_View_Data :: struct #packed {
         []dap.Thread,
         []dap.StackFrame,
         []dap.DisassembledInstruction,
+        Breakpoints,
     },
 }
 
@@ -66,7 +87,7 @@ runtime_data: struct {
     view_data: [View_Type][dynamic]Runtime_View_Data,
 }
 
-singletons: bit_set[View_Type] : { .Output, .Disassembly, .Processes, .Threads, .Stack_Trace }
+singletons: bit_set[View_Type] : { .Output, .Disassembly, .Processes, .Threads, .Stack_Trace, .Breakpoints }
 data: [View_Type][dynamic]View_Data
 
 StopOn :: enum u8 {

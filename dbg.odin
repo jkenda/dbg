@@ -198,8 +198,39 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     log.warn("response not implemented:", m)
                     vmem.arena_destroy(&arena)
                 case .setFunctionBreakpoints:
-                    log.info("function BPs set")
-                    vmem.arena_destroy(&arena)
+                    log.info("setFunctionBreakpoints:", m.body)
+
+                    if data.executable.stop_on == .StopOnMain {
+                        state = .ConfigurationDone
+                        vmem.arena_destroy(&arena)
+                    }
+                    else {
+                        body := m.body.(dap.Body_SetFunctionBreakpoints)
+                        view_data := &views.runtime_data.view_data[.Breakpoints][0].data
+                        if view_data^ == nil {
+                            view_data^ = views.Breakpoints{}
+                        }
+
+                        bp_data := &view_data.(views.Breakpoints)
+
+                        // delete previous breakpoints from the map
+                        for bp in bp_data.function_breakpoints.data {
+                            if id, ok := bp.id.?; ok {
+                                delete_key(&bp_data.bp_map, id)
+                            }
+                        }
+
+                        // replace with new function breakpoints
+                        vmem.arena_destroy(&bp_data.function_breakpoints.arena)
+                        bp_data.function_breakpoints.data = body.breakpoints
+
+                        // add new breakpoints to the map
+                        for &bp in bp_data.function_breakpoints.data {
+                            if id, ok := bp.id.?; ok {
+                                bp_data.bp_map[id] = &bp
+                            }
+                        }
+                    }
                 case .configurationDone:
                     log.info("configuration done")
                     vmem.arena_destroy(&arena)
@@ -305,8 +336,47 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     state = .Initializing
                     vmem.arena_destroy(&arena)
                 case .stopped:
-                    log.info("stopped:", m.body)
+                    if data.executable.stop_on == .StopOnMain {
+                        log.info("stopped on main")
+                        dap.write_message(conn, dap.Arguments_SetFunctionBreakpoints{})
+                        data.executable.stop_on = .None
+                    }
+                    else {
+                        log.info("stopped")
+                    }
+
                     state = .Stopped
+                    vmem.arena_destroy(&arena)
+                case .breakpoint:
+                    log.info("BP event:", m.body)
+
+                    if data.executable.stop_on == .StopOnMain {
+                        continue
+                    }
+
+                    body := m.body.(dap.Body_Breakpoint)
+                    switch body.reason {
+                    case .changed:
+                        view_data := views.runtime_data.view_data[.Breakpoints][0].data.(views.Breakpoints)
+                        if id, ok := body.breakpoint.id.?; ok {
+                            switch v in view_data.bp_map[id] {
+                            case ^views.Line_Breakpoint:
+                                vmem.arena_destroy(&v.arena)
+                                v.data = body.breakpoint
+                                v.arena = arena
+                            case ^dap.Breakpoint:
+                                v^ = body.breakpoint
+                            }
+                        }
+
+                    case .new:
+                        // adding and removing function breakpoints is illegal
+                        unimplemented("new breakpoint")
+                    case .removed:
+                        // adding and removing function breakpoints is illegal
+                        unimplemented("removed breakpoint")
+                    }
+
                     vmem.arena_destroy(&arena)
 
                 case ._unknown:
@@ -362,9 +432,12 @@ state_transition :: proc(conn: ^dap.Connection) {
                     { name = "main" }
                 }
             })
-        }
 
-        state = .ConfigurationDone
+            state = .Waiting
+        }
+        else {
+            state = .ConfigurationDone
+        }
     case .ConfigurationDone:
         if debugger_capabilities.supportsConfigurationDoneRequest {
             dap.write_message(conn, dap.Arguments_ConfigurationDone{})
@@ -394,8 +467,11 @@ state_transition :: proc(conn: ^dap.Connection) {
     case .SteppingInto:
         unimplemented()
     case .SteppingOut:
+        unimplemented()
     case .Error:
+        unimplemented()
     case .Exiting:
+        unimplemented()
     }
 }
 

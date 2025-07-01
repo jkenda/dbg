@@ -228,6 +228,7 @@ Event_Type :: enum u8 {
     exited,
     terminated,
     stopped,
+    breakpoint,
 }
 
 Event :: struct #packed {
@@ -241,6 +242,7 @@ Event :: struct #packed {
         Body_Exited,
         Body_Terminated,
         Body_Stopped,
+        Body_Breakpoint,
 
         Body_Empty,
     },
@@ -283,6 +285,11 @@ StoppedReason :: enum u8 {
     pause,
     entry,
     goto,
+}
+
+Body_Breakpoint :: struct #packed {
+    reason: enum u8 { changed, new, removed },
+    breakpoint: Breakpoint,
 }
 
 
