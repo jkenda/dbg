@@ -17,7 +17,7 @@ import "core:os"
 import "views"
 import "dap"
 
-APPLICATION_NAME :: "Debugger"
+APPLICATION_NAME :: "dbg"
 
 main :: proc() {
     when ODIN_DEBUG {
