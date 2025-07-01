@@ -240,7 +240,10 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     view_data.arena = arena
 
                     body := m.body.(dap.Body_Threads)
-                    view_data.data = body.threads
+                    view_data.data = views.Threads{
+                        threads = body.threads,
+                        selected = 0,
+                    }
 
                     dap.write_message(conn, dap.Arguments_StackTrace{
                         threadId = body.threads[0].id
@@ -465,19 +468,22 @@ state_transition :: proc(conn: ^dap.Connection) {
         dap.write_message(conn, dap.Arguments_Threads{})
         state = .Waiting
     case .SteppingOver:
-        view_data := &views.runtime_data.view_data[.Threads][0]
-        data := view_data.data.([]dap.Thread)
-        dap.write_message(conn, dap.Arguments_Next{ threadId = data[0].id })
+        view_data := &views.runtime_data.view_data[.Threads][0].data.(views.Threads)
+        thread := view_data.threads[view_data.selected]
+
+        dap.write_message(conn, dap.Arguments_Next{ threadId = thread.id })
         state = .Waiting
     case .SteppingInto:
-        view_data := &views.runtime_data.view_data[.Threads][0]
-        data := view_data.data.([]dap.Thread)
-        dap.write_message(conn, dap.Arguments_StepIn{ threadId = data[0].id })
+        view_data := &views.runtime_data.view_data[.Threads][0].data.(views.Threads)
+        thread := view_data.threads[view_data.selected]
+
+        dap.write_message(conn, dap.Arguments_StepIn{ threadId = thread.id })
         state = .Waiting
     case .SteppingOut:
-        view_data := &views.runtime_data.view_data[.Threads][0]
-        data := view_data.data.([]dap.Thread)
-        dap.write_message(conn, dap.Arguments_StepOut{ threadId = data[0].id })
+        view_data := &views.runtime_data.view_data[.Threads][0].data.(views.Threads)
+        thread := view_data.threads[view_data.selected]
+
+        dap.write_message(conn, dap.Arguments_StepOut{ threadId = thread.id })
         state = .Waiting
     case .Error:
     case .Exiting:

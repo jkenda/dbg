@@ -6,14 +6,14 @@ import "core:strconv"
 
 show_threads_view :: proc(view_data: ^Runtime_View_Data) {
     #partial switch d in view_data.data {
-    case []dap.Thread:
+    case Threads:
         if (im.BeginTable("Threads", 2, im.TableFlags_Resizable)) {
             im.TableSetupColumn("ID"  , {.WidthStretch})
             im.TableSetupColumn("Name", {.WidthStretch})
 
             im.TableHeadersRow()
 
-            for thread in d {
+            for thread in d.threads {
                 im.TableNextRow()
 
                 {

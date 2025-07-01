@@ -64,13 +64,19 @@ Breakpoints :: struct #packed {
     function_breakpoints: Function_Breakpoints,
     bp_map: map[dap.number]union { ^Line_Breakpoint, ^dap.Breakpoint }
 }
+
+Threads :: struct #packed {
+    threads: []dap.Thread,
+    selected: u32,
+}
+
 Runtime_View_Data :: struct #packed {
     arena: vmem.Arena,
     first: bool,
 
     data: union {
         string,
-        []dap.Thread,
+        Threads,
         []dap.StackFrame,
         []dap.DisassembledInstruction,
         Breakpoints,
@@ -98,10 +104,10 @@ StopOn :: enum u8 {
 
 Global_Data :: struct {
     executable: struct {
-        program: [dynamic]u8,
-        args: [dynamic]u8,
-        cwd:  [dynamic]u8,
-        stop_on: StopOn
+        program: string,
+        args: string,
+        cwd:  string,
+        stop_on: StopOn,
     },
     breakpoints: [dynamic]dap.SourceBreakpoints,
 }
