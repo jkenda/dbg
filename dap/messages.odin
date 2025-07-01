@@ -170,7 +170,7 @@ Response :: struct #packed {
         Body_Disassemble,
         Body_SetFunctionBreakpoints,
 
-        Body_Empty,
+        Body_Ack,
     },
 }
 Message :: enum u8 {
@@ -178,7 +178,7 @@ Message :: enum u8 {
     notStopped,
 }
 
-Body_Empty :: distinct Empty
+Body_Ack :: distinct Empty
 
 Body_Error :: struct {
     error: struct #packed {
@@ -237,6 +237,7 @@ Event_Type :: enum u8 {
     exited,
     terminated,
     stopped,
+    continued,
     breakpoint,
 }
 
@@ -251,9 +252,10 @@ Event :: struct #packed {
         Body_Exited,
         Body_Terminated,
         Body_Stopped,
+        Body_Continued,
         Body_Breakpoint,
 
-        Body_Empty,
+        Body_Ack,
     },
 }
 
@@ -294,6 +296,11 @@ StoppedReason :: enum u8 {
     pause,
     entry,
     goto,
+}
+
+Body_Continued :: struct #packed {
+    threadId: number,
+    allThreadsContinued: Maybe(bool),
 }
 
 Body_Breakpoint :: struct #packed {

@@ -350,8 +350,11 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
 
                     state = .Stopped
                     vmem.arena_destroy(&arena)
+                case .continued:
+                    log.info("continued")
+                    state = .Running
                 case .breakpoint:
-                    log.info("BP event:", m.body)
+                    log.info("BP event")
 
                     if data.executable.stop_on == .StopOnMain {
                         continue
@@ -456,7 +459,6 @@ state_transition :: proc(conn: ^dap.Connection) {
     case .Starting:
         unimplemented()
     case .Running:
-        unimplemented()
     case .Stopping:
         unimplemented()
     case .Stopped:

@@ -78,7 +78,7 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
     if response.success {
         switch response.command {
         case .cancel, .launch, .next, .stepIn, .disconnect, .terminate, .configurationDone:
-            response.body = Body_Empty{}
+            response.body = Body_Ack{}
         case .initialize:
             response.body = parse_body(Body_Initialized, msg_str) or_return
         case .setBreakpoints:
@@ -111,7 +111,7 @@ parse_event :: proc(msg_str: string) -> (event: Event, err: Error) {
     case .output:
         event.body = parse_body(Body_OutputEvent, msg_str) or_return
     case .initialized:
-        event.body = Body_Empty{}
+        event.body = Body_Ack{}
     case .process:
         event.body = parse_body(Body_Process, msg_str) or_return
     case .exited:
@@ -120,6 +120,8 @@ parse_event :: proc(msg_str: string) -> (event: Event, err: Error) {
         event.body = parse_body(Body_Terminated, msg_str) or_return
     case .stopped:
         event.body = parse_body(Body_Stopped, msg_str) or_return
+    case .continued:
+        event.body = parse_body(Body_Continued, msg_str) or_return
     case .breakpoint:
         event.body = parse_body(Body_Breakpoint, msg_str) or_return
 
