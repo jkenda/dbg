@@ -33,6 +33,7 @@ Command :: enum u8 {
     threads,
     stackTrace,
     disassemble,
+    stepIn,
     next,
     disconnect,
     terminate,
@@ -64,6 +65,7 @@ Arguments :: union {
     Arguments_StackTrace,
     Arguments_Disassemble,
     Arguments_Next,
+    Arguments_StepIn,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -128,6 +130,13 @@ Arguments_Next :: struct #packed {
     threadId: number,
     singleThread: Maybe(bool) `json:"singleThread,omitempty"`,
     granularity: Maybe(SteppingGranularity) `json:"granularity,omitempty"`,
+}
+
+Arguments_StepIn :: struct #packed {
+  threadId: number,
+  singleThread: Maybe(bool) `json:"singleThread,omitempty"`,
+  targetId: Maybe(number) `json:"targetId,omitempty"`,
+  granularity: Maybe(SteppingGranularity) `json:"granularity,omitempty"`,
 }
 
 Arguments_Disconnect :: struct #packed {

@@ -188,6 +188,8 @@ write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err:
             return .disassemble
         case Arguments_Next:
             return .next
+        case Arguments_StepIn:
+            return .stepIn
         case Arguments_Disconnect:
             return .disconnect
         case Arguments_Terminate:
