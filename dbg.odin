@@ -515,25 +515,31 @@ show_GUI :: proc(window: ^sdl.Window) {
     if show_exec_dialog {
         if im.Begin("Executable", &show_exec_dialog, { .NoDocking, }) {
             {
-                reserve(&data.executable.program, 2 * len(data.executable.program) + 0x10)
-                cstr_buf := cstring(raw_data(data.executable.program))
+                @(static)
+                buf: [256]u8
+                cstr_buf := cstring(raw_data(buf[:]))
 
-                im.InputTextWithHint("Program", "Path to executable", cstr_buf, cap(data.executable.program))
-                resize(&data.executable.program, len(cstr_buf))
+                if im.InputTextWithHint("Program", "Path to executable", cstr_buf, len(buf)) {
+                    data.executable.program = string(cstr_buf)
+                }
             }
             {
-                reserve(&data.executable.args, 2 * len(data.executable.args) + 0x10)
-                cstr_buf := cstring(raw_data(data.executable.args))
+                @(static)
+                buf: [256]u8
+                cstr_buf := cstring(raw_data(buf[:]))
 
-                im.InputTextWithHint("Args", "Command-line arguments", cstr_buf, cap(data.executable.args))
-                resize(&data.executable.args, len(cstr_buf))
+                if im.InputTextWithHint("Args", "Command-line arguments", cstr_buf, len(buf)) {
+                    data.executable.args = string(cstr_buf)
+                }
             }
             {
-                reserve(&data.executable.cwd, 2 * len(data.executable.cwd) + 0x10)
-                cstr_buf := cstring(raw_data(data.executable.cwd))
+                @(static)
+                buf: [256]u8
+                cstr_buf := cstring(raw_data(buf[:]))
 
-                im.InputTextWithHint("CWD", "Current working directory", cstr_buf, cap(data.executable.cwd))
-                resize(&data.executable.cwd, len(cstr_buf))
+                if im.InputTextWithHint("CWD", "Current working directory", cstr_buf, len(buf)) {
+                    data.executable.args = string(cstr_buf)
+                }
             }
 
             stop_on := i32(data.executable.stop_on)
