@@ -1,11 +1,8 @@
 package dbg
 
 import im "odin-imgui"
-import "odin-imgui/imgui_impl_sdl2"
-import "odin-imgui/imgui_impl_opengl3"
 
-import sdl "vendor:sdl2"
-import gl "vendor:OpenGL"
+import "platform"
 
 import vmem "core:mem/virtual"
 import "core:strings"
@@ -17,8 +14,6 @@ import "core:os"
 import "views"
 import "dap"
 
-APPLICATION_NAME :: "dbg"
-
 main :: proc() {
     when ODIN_DEBUG {
         context.logger = log.create_console_logger(.Debug)
@@ -27,20 +22,11 @@ main :: proc() {
         context.logger = log.create_console_logger(.Info)
     }
 
-    log.info("initializing SDL")
-    window := init_SDL()
-    defer sdl.Quit()
-    defer sdl.DestroyWindow(window)
-
-    log.info("initializing OpenGL")
-    gl_ctx := init_openGL(window)
-    defer sdl.GL_DeleteContext(gl_ctx)
-
     log.info("initializing ImGui")
-    io := init_ImGui(window, gl_ctx)
-    defer im.DestroyContext()
-    defer imgui_impl_sdl2.Shutdown()
-    defer imgui_impl_opengl3.Shutdown()
+    io := init_ImGui()
+
+    platform_state := platform.init()
+    defer platform.destroy(platform_state)
 
     views.init_data()
     defer views.delete_data()
@@ -51,13 +37,15 @@ main :: proc() {
 
     for state != .Exiting {
         handle_DAP_messages(&dap_connection)
-        handle_SDL_events()
-
         state_transition(&dap_connection)
 
-        new_frame()
-        show_GUI(window)
-        render_GUI(window, io^)
+        if !platform.handle_events(platform_state) {
+            state = .Exiting
+        }
+
+        platform.before_show(&platform_state)
+        show_GUI(platform_state)
+        platform.after_show(platform_state)
 
         free_all(context.temp_allocator)
     }
@@ -75,7 +63,6 @@ main :: proc() {
 init_debugger :: proc() -> dap.Connection {
     // start DAP connection
     conn, err := dap.connect()
-    assert(err == nil, strings.clone_from(sdl.GetError()))
 
     { // initialize debugger
         dap.write_message(&conn, dap.Arguments_Initialize{
@@ -94,46 +81,7 @@ init_debugger :: proc() -> dap.Connection {
     return conn
 }
 
-init_SDL :: proc() -> ^sdl.Window {
-    // prefer Wayland
-    if sdl.GetPlatform() == "Linux" {
-        sdl.SetHint("SDL_VIDEODRIVER", "wayland,x11")
-    }
-
-    // don't keep the screen from sleeping
-    sdl.EnableScreenSaver()
-
-    assert(sdl.Init(sdl.INIT_EVERYTHING) == 0, strings.clone_from(sdl.GetError()))
-
-    sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLcontextFlag.FORWARD_COMPATIBLE_FLAG))
-    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, i32(sdl.GLprofile.CORE))
-    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 3)
-    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 2)
-
-    window := sdl.CreateWindow(
-        APPLICATION_NAME,
-        sdl.WINDOWPOS_CENTERED,
-        sdl.WINDOWPOS_CENTERED,
-        960, 720,
-        {.OPENGL, .RESIZABLE, .ALLOW_HIGHDPI})
-    assert(window != nil, strings.clone_from(sdl.GetError()))
-
-    return window
-}
-
-init_openGL :: proc(window: ^sdl.Window) -> sdl.GLContext {
-    gl_ctx := sdl.GL_CreateContext(window)
-    gl.load_up_to(3, 2, proc(p: rawptr, name: cstring) {
-        (cast(^rawptr)p)^ = sdl.GL_GetProcAddress(name)
-    })
-
-    sdl.GL_MakeCurrent(window, gl_ctx)
-    sdl.GL_SetSwapInterval(1) // vsync
-
-    return gl_ctx
-}
-
-init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
+init_ImGui :: proc() -> ^im.IO {
     im.CHECKVERSION()
     im.CreateContext()
 
@@ -160,11 +108,7 @@ init_ImGui :: proc(window: ^sdl.Window, gl_ctx: sdl.GLContext) -> ^im.IO {
     //}
 
     im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/CONSOLA.ttf", 14)
-
     im.StyleColorsDark()
-
-    imgui_impl_sdl2.InitForOpenGL(window, gl_ctx)
-    imgui_impl_opengl3.Init(nil)
 
     return io
 }
@@ -490,26 +434,9 @@ state_transition :: proc(conn: ^dap.Connection) {
     }
 }
 
-handle_SDL_events :: proc() {
-    e: sdl.Event
-    for sdl.PollEvent(&e) {
-        imgui_impl_sdl2.ProcessEvent(&e)
-
-        #partial switch e.type {
-        case .QUIT: state = .Exiting
-        }
-    }
-}
-
-new_frame :: proc() {
-    imgui_impl_opengl3.NewFrame()
-    imgui_impl_sdl2.NewFrame()
-    im.NewFrame()
-}
-
-show_GUI :: proc(window: ^sdl.Window) {
+show_GUI :: proc(platform_state: platform.State) {
     if state > State.SettingExecutable {
-        show_main_window(window)
+        show_main_window(platform_state)
     }
 
     if show_exec_dialog {
@@ -554,34 +481,9 @@ show_GUI :: proc(window: ^sdl.Window) {
     }
 }
 
-render_GUI :: proc(window: ^sdl.Window, io: im.IO) {
-    { // Render
-        im.Render()
-        gl.Viewport(0, 0, i32(io.DisplaySize.x), i32(io.DisplaySize.y))
-        gl.ClearColor(0, 0, 0, 1)
-        gl.Clear(gl.COLOR_BUFFER_BIT)
-        imgui_impl_opengl3.RenderDrawData(im.GetDrawData())
-    }
-
-    if (.ViewportsEnable in io.ConfigFlags) {
-        backup_current_window := sdl.GL_GetCurrentWindow()
-        backup_current_context := sdl.GL_GetCurrentContext()
-
-        im.UpdatePlatformWindows();
-        im.RenderPlatformWindowsDefault();
-
-        sdl.GL_MakeCurrent(backup_current_window, backup_current_context);
-    }
-
-    sdl.GL_SwapWindow(window)
-}
-
 ROOT_DOCK_SPACE :: "RootDockSpace"
-show_main_window :: proc(window: ^sdl.Window) {
-    x, y: i32
-    sdl.GetWindowPosition(window, &x, &y)
-
-    im.SetNextWindowPos({f32(x), f32(y)})
+show_main_window :: proc(platform_state: platform.State) {
+    im.SetNextWindowPos(platform.window_pos(platform_state))
     im.SetNextWindowSize(im.GetIO().DisplaySize)
     im.Begin(ROOT_DOCK_SPACE, nil, {
         .NoTitleBar,
