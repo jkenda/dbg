@@ -5,8 +5,10 @@ import im "odin-imgui"
 import "platform"
 
 import vmem "core:mem/virtual"
+import "core:path/filepath"
 import "core:strings"
 import "core:slice"
+import "core:time"
 import "core:fmt"
 import "core:log"
 import "core:os"
@@ -107,9 +109,16 @@ init_ImGui :: proc() -> ^im.IO {
     //    style.FrameBorderSize = 1
     //}
 
-    im.FontAtlas_AddFontFromFileTTF(io.Fonts, "fonts/CONSOLA.ttf", 14)
+    exec_path, ok := filepath.abs(os.args[0])
+    assert(ok)
+
+    font_path := fmt.caprintf("{}/{}", filepath.dir(exec_path), "fonts/CONSOLA.ttf")
+    log.info("loading font from", font_path)
+
+    im.FontAtlas_AddFontFromFileTTF(io.Fonts, font_path, 14)
     im.StyleColorsDark()
 
+    delete(font_path)
     return io
 }
 

@@ -42,10 +42,10 @@ init :: proc() -> State {
     assert(window != nil, "GLFW: failed to initialize window")
 
     device = mtl.CreateSystemDefaultDevice()
-	fmt.println("created device:", device->name()->odinString())
+	log.info("created device:", device->name()->odinString())
 
     command_queue = device->newCommandQueue()
-    fmt.println("created comand queue:", command_queue->label()->odinString())
+    log.info("created comand queue:", command_queue->label()->odinString())
 
     log.info("initializing ImGui")
     imgui_impl_glfw.InitForOther(window, true)
