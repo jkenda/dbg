@@ -2,15 +2,15 @@
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    #odin 
-    #clang
+    odin 
+    clang
 
-    #git
+    git
     
-    #gnumake42
-    #SDL2
+    gnumake42
+    SDL2
     glfw
-    #libcxx
+    libcxx
     python311Packages.ply
     #gdb
     #gf

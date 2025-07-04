@@ -1,19 +1,16 @@
 #+build darwin
 package platform
 
-import "core:log"
-import "core:fmt"
-import "core:os"
 import "base:runtime"
+import "core:log"
+
+import "vendor:glfw"
 
 import ns "core:sys/darwin/Foundation"
 import ca "vendor:darwin/QuartzCore"
 import mtl "vendor:darwin/Metal"
 
-import "vendor:glfw"
-
 import imgui "../odin-imgui"
-
 import "../odin-imgui/imgui_impl_metal"
 import "../odin-imgui/imgui_impl_glfw"
 
@@ -32,7 +29,7 @@ init :: proc() -> State {
 
     glfw.SetErrorCallback(proc "c" (error: i32, description: cstring) {
         context = runtime.default_context()
-        fmt.fprintf(os.stderr, "Glfw Error %d: %s\n", error, description)
+        log.error("Glfw Error %d: %s\n", error, description)
     })
     assert(bool(glfw.Init()), "failed to initialize GLFW")
 
