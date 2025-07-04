@@ -1,3 +1,6 @@
 [submodule "odin-imgui"]
 	path = odin-imgui
 	url = https://gitlab.com/L-4/odin-imgui.git
+[submodule "Odin"]
+	path = Odin
+	url = git@github.com:odin-lang/Odin.git
