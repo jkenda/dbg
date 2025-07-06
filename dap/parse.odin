@@ -43,6 +43,8 @@ parse_request :: proc(msg_str: string) -> (request: Request, err: Error) {
         request.arguments = parse_arguments(Arguments_Initialize, msg_str) or_return
     case .launch:
         request.arguments = parse_arguments(Arguments_Launch, msg_str) or_return
+    case .restart:
+        request.arguments = parse_arguments(Arguments_Restart, msg_str) or_return
     case .configurationDone:
         request.arguments = parse_arguments(Arguments_ConfigurationDone, msg_str) or_return
     case .setBreakpoints:
@@ -79,7 +81,7 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
 
     if response.success {
         switch response.command {
-        case .cancel, .launch, .next, .stepIn, .stepOut, .disconnect, .terminate, .configurationDone:
+        case .cancel, .launch, .restart, .next, .stepIn, .stepOut, .disconnect, .terminate, .configurationDone:
             response.body = Body_Ack{}
         case .initialize:
             response.body = parse_body(Body_Initialized, msg_str) or_return

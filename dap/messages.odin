@@ -27,6 +27,7 @@ Command :: enum u8 {
     cancel,
     initialize,
     launch,
+    restart,
     setBreakpoints,
     setFunctionBreakpoints,
     configurationDone,
@@ -68,6 +69,7 @@ Arguments :: union {
     Arguments_Next,
     Arguments_StepIn,
     Arguments_StepOut,
+    Arguments_Restart,
     Arguments_Disconnect,
     Arguments_Terminate,
 }
@@ -104,6 +106,8 @@ Arguments_Launch :: struct #packed {
     stopOnEntry: Maybe(bool) `json:"stopOnEntry,omitempty"`,
     noDebug: Maybe(bool) `json:"noDebug,omitempty"`,
 }
+
+Arguments_Restart :: union { Arguments_Launch /*, Arguments_Attach */ }
 
 Arguments_SetBreakpoints :: SourceBreakpoints
 Arguments_ConfigurationDone :: distinct Empty

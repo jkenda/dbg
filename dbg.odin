@@ -141,6 +141,9 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                 case .launch:
                     log.info("program launched")
                     vmem.arena_destroy(&arena)
+                case .restart:
+                    log.info("program restarting")
+                    vmem.arena_destroy(&arena)
                 case .initialize:
                     log.info("debugger initialized. ready for 'launch'")
                     debugger_capabilities = m.body.(dap.Body_Initialized)
@@ -372,12 +375,15 @@ state_transition :: proc(conn: ^dap.Connection) {
         cwd := string(data.executable.cwd[:])
 
         log.info("launching program ", program, "with args", args, "in cwd", cwd)
-        dap.write_message(conn, dap.Arguments_Launch{
+
+        dap_args := dap.Arguments_Launch{
             program = program,
             args = args,
             cwd = cwd,
             stopOnEntry = data.executable.stop_on == .StopOnEntry,
-        })
+        }
+        dap.write_message(conn, dap_args)
+        launched_with_arguments = dap_args
 
         state = .Waiting
     case .SettingBreakpoints:
@@ -411,7 +417,8 @@ state_transition :: proc(conn: ^dap.Connection) {
     case .Waiting:
 
     case .Resetting:
-        unimplemented()
+        dap.write_message(conn, launched_with_arguments)
+        state = .Waiting
     case .Starting:
         unimplemented()
     case .Running:
@@ -623,6 +630,7 @@ debugger_initialized := false
 data: views.Global_Data
 
 show_exec_dialog: bool
+launched_with_arguments: dap.Arguments_Restart
 
 when ODIN_DEBUG {
     show_demo_window: bool
