@@ -166,41 +166,43 @@ write_message_msg :: proc(conn: ^Connection_Stdio, msg: ^Protocol_Message) -> (e
 }
 
 write_message_request :: proc(conn: ^Connection_Stdio, args: Arguments) -> (err: json.Marshal_Error) {
-    get_command :: proc(args: Arguments) -> Command {
+    get_command :: proc(args: Arguments) -> string {
         switch a in args {
         case Arguments_Cancel:
-            return .cancel
+            return "cancel"
         case Arguments_Initialize:
-            return .initialize
+            return "initialize"
         case Arguments_Launch:
-            return .launch
+            return "launch"
         case Arguments_SetBreakpoints:
-            return .setBreakpoints
+            return "setBreakpoints"
         case Arguments_SetFunctionBreakpoints:
-            return .setFunctionBreakpoints
+            return "setFunctionBreakpoints"
         case Arguments_ConfigurationDone:
-            return .configurationDone
+            return "configurationDone"
         case Arguments_Threads:
-            return .threads
+            return "threads"
         case Arguments_StackTrace:
-            return .stackTrace
+            return "stackTrace"
         case Arguments_Disassemble:
-            return .disassemble
+            return "disassemble"
         case Arguments_Next:
-            return .next
+            return "next"
         case Arguments_StepIn:
-            return .stepIn
+            return "stepIn"
         case Arguments_StepOut:
-            return .stepOut
+            return "stepOut"
+        case Arguments_Continue:
+            return "continue"
         case Arguments_Restart:
-            return .restart
+            return "restart"
         case Arguments_Disconnect:
-            return .disconnect
+            return "disconnect"
         case Arguments_Terminate:
-            return .terminate
+            return "terminate"
         }
 
-        return nil
+        return ""
     }
 
     msg: Protocol_Message = Request {
@@ -241,7 +243,7 @@ read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.a
     // read "Content-Length: " and ensure its validity
     len_buf: [len(CONTENT_LENGTH)]u8
     io.read(conn.stdout.stream, len_buf[:])
-    assert(len_buf == CONTENT_LENGTH)
+    assert(len_buf == CONTENT_LENGTH, fmt.aprintln(len_buf))
 
     // read until newline
     len := 0

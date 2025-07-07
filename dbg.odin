@@ -136,25 +136,25 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                 vmem.arena_destroy(&arena)
             case dap.Response:
                 switch m.command {
-                case .cancel, .disconnect, .terminate:
+                case "cancel", "disconnect", "terminate":
                     vmem.arena_destroy(&arena)
-                case .launch:
+                case "launch":
                     log.info("program launched")
                     vmem.arena_destroy(&arena)
-                case .restart:
+                case "restart":
                     log.info("program restarting")
                     vmem.arena_destroy(&arena)
-                case .initialize:
+                case "initialize":
                     log.info("debugger initialized. ready for 'launch'")
                     debugger_capabilities = m.body.(dap.Body_Initialized)
                     debugger_initialized = true
                     vmem.arena_destroy(&arena)
 
-                case .setBreakpoints:
+                case "setBreakpoints":
                     log.warn("response not implemented:", m)
                     vmem.arena_destroy(&arena)
-                case .setFunctionBreakpoints:
-                    log.info("setFunctionBreakpoints")
+                case "setFunctionBreakpoints":
+                    log.debug("setFunctionBreakpoints")
 
                     if data.executable.stop_on == .StopOnMain {
                         state = .ConfigurationDone
@@ -187,10 +187,10 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                             }
                         }
                     }
-                case .configurationDone:
+                case "configurationDone":
                     log.info("configuration done")
                     vmem.arena_destroy(&arena)
-                case .threads:
+                case "threads":
                     view_data := &views.runtime_data.view_data[.Threads][0]
                     vmem.arena_destroy(&view_data.arena)
                     view_data.arena = arena
@@ -204,7 +204,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                     dap.write_message(conn, dap.Arguments_StackTrace{
                         threadId = body.threads[0].id
                     })
-                case .stackTrace:
+                case "stackTrace":
                     view_data := &views.runtime_data.view_data[.Stack_Trace][0]
                     vmem.arena_destroy(&view_data.arena)
                     view_data.arena = arena
@@ -258,7 +258,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                         }
                     }
 
-                case .disassemble:
+                case "disassemble":
                     view_data := &views.runtime_data.view_data[.Disassembly][0]
                     vmem.arena_destroy(&view_data.arena)
                     view_data.arena = arena
@@ -266,14 +266,17 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
 
                     body := m.body.(dap.Body_Disassemble)
                     view_data.data = body.instructions
-                case .next:
+                case "next":
                     vmem.arena_destroy(&arena)
-                case .stepIn:
+                case "stepIn":
                     vmem.arena_destroy(&arena)
-                case .stepOut:
+                case "stepOut":
+                    vmem.arena_destroy(&arena)
+                case "continue":
+                    state = .Running
                     vmem.arena_destroy(&arena)
 
-                case ._unknown:
+                case:
                     log.warn("response not implemented:", m)
                     vmem.arena_destroy(&arena)
                 }
@@ -304,16 +307,16 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
                         data.executable.stop_on = .None
                     }
                     else {
-                        log.info("stopped")
+                        log.debug("stopped")
                     }
 
                     state = .Stopped
                     vmem.arena_destroy(&arena)
                 case .continued:
-                    log.info("continued")
+                    log.debug("continued")
                     state = .Running
                 case .breakpoint:
-                    log.info("BP event")
+                    log.debug("BP event")
 
                     if data.executable.stop_on == .StopOnMain {
                         continue
@@ -387,7 +390,7 @@ state_transition :: proc(conn: ^dap.Connection) {
 
         state = .Waiting
     case .SettingBreakpoints:
-        log.info("setting breakpoints")
+        log.debug("setting breakpoints")
 
         for bp in data.breakpoints {
             dap.write_message(conn, dap.Arguments_SetBreakpoints(bp))
@@ -415,15 +418,24 @@ state_transition :: proc(conn: ^dap.Connection) {
         }
         state = .Waiting
     case .Waiting:
-
     case .Resetting:
-        dap.write_message(conn, launched_with_arguments)
-        state = .Waiting
+        if debugger_capabilities.supportsRestartRequest {
+            dap.write_message(conn, launched_with_arguments)
+            state = .Waiting
+        }
+        else do log.error("This feature isn't supported by the debugger.")
     case .Starting:
-        unimplemented()
+        view_data := &views.runtime_data.view_data[.Threads][0].data.(views.Threads)
+        thread := view_data.threads[view_data.selected]
+
+        dap.write_message(conn, dap.Arguments_Continue{ threadId = thread.id })
     case .Running:
     case .Stopping:
-        unimplemented()
+        if debugger_capabilities.supportsTerminateRequest {
+            dap.write_message(conn, dap.Arguments_Terminate{})
+            state = .Waiting
+        }
+        else do log.error("This feature isn't supported by the debugger.")
     case .Stopped:
         dap.write_message(conn, dap.Arguments_Threads{})
         state = .Waiting

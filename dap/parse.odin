@@ -37,37 +37,39 @@ parse_request :: proc(msg_str: string) -> (request: Request, err: Error) {
     json.unmarshal_string(msg_str, &request) or_return
 
     switch request.command {
-    case .cancel:
+    case "cancel":
         request.arguments = parse_arguments(Arguments_Cancel, msg_str) or_return
-    case .initialize:
+    case "initialize":
         request.arguments = parse_arguments(Arguments_Initialize, msg_str) or_return
-    case .launch:
+    case "launch":
         request.arguments = parse_arguments(Arguments_Launch, msg_str) or_return
-    case .restart:
+    case "restart":
         request.arguments = parse_arguments(Arguments_Restart, msg_str) or_return
-    case .configurationDone:
+    case "configurationDone":
         request.arguments = parse_arguments(Arguments_ConfigurationDone, msg_str) or_return
-    case .setBreakpoints:
+    case "setBreakpoints":
         request.arguments = parse_arguments(Arguments_SetBreakpoints, msg_str) or_return
-    case .setFunctionBreakpoints:
+    case "setFunctionBreakpoints":
         request.arguments = parse_arguments(Arguments_SetFunctionBreakpoints, msg_str) or_return
-    case .threads:
+    case "threads":
         request.arguments = parse_arguments(Arguments_Threads, msg_str) or_return
-    case .stackTrace:
+    case "stackTrace":
         request.arguments = parse_arguments(Arguments_StackTrace, msg_str) or_return
-    case .disassemble:
+    case "disassemble":
         request.arguments = parse_arguments(Arguments_Disassemble, msg_str) or_return
-    case .next:
+    case "next":
         request.arguments = parse_arguments(Arguments_Next, msg_str) or_return
-    case .stepIn:
+    case "stepIn":
         request.arguments = parse_arguments(Arguments_StepIn, msg_str) or_return
-    case .stepOut:
+    case "stepOut":
         request.arguments = parse_arguments(Arguments_StepOut, msg_str) or_return
-    case .disconnect:
+    case "continue":
+        request.arguments = parse_arguments(Arguments_Continue, msg_str) or_return
+    case "disconnect":
         request.arguments = parse_arguments(Arguments_Disconnect, msg_str) or_return
-    case .terminate:
+    case "terminate":
         request.arguments = parse_arguments(Arguments_Terminate, msg_str) or_return
-    case nil, ._unknown:
+    case:
         log.warn("unknown message:", msg_str)
         err = .Unknown_Message
     }
@@ -81,21 +83,23 @@ parse_response :: proc(msg_str: string) -> (response: Response, err: Error) {
 
     if response.success {
         switch response.command {
-        case .cancel, .launch, .restart, .next, .stepIn, .stepOut, .disconnect, .terminate, .configurationDone:
+        case "cancel", "launch", "restart", "next", "stepIn", "stepOut", "disconnect", "terminate", "configurationDone":
             response.body = Body_Ack{}
-        case .initialize:
+        case "initialize":
             response.body = parse_body(Body_Initialized, msg_str) or_return
-        case .setBreakpoints:
+        case "setBreakpoints":
             unimplemented()
-        case .setFunctionBreakpoints:
+        case "setFunctionBreakpoints":
             response.body = parse_body(Body_SetFunctionBreakpoints, msg_str) or_return
-        case .threads:
+        case "threads":
             response.body = parse_body(Body_Threads, msg_str) or_return
-        case .stackTrace:
+        case "stackTrace":
             response.body = parse_body(Body_StackTrace, msg_str) or_return
-        case .disassemble:
+        case "disassemble":
             response.body = parse_body(Body_Disassemble, msg_str) or_return
-        case nil, ._unknown:
+        case "continue":
+            response.body = parse_body(Body_Continue, msg_str) or_return
+        case:
             log.warn("unknown message:", msg_str)
             err = .Unknown_Message
         }

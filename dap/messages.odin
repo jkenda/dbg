@@ -36,6 +36,7 @@ Command :: enum u8 {
     disassemble,
     stepIn,
     stepOut,
+    continue_,
     next,
     disconnect,
     terminate,
@@ -52,7 +53,7 @@ Request :: struct #packed {
     seq: number,
     type: Message_Type,
 
-    command: Command,
+    command: string,
     arguments: Arguments,
 }
 
@@ -69,6 +70,7 @@ Arguments :: union {
     Arguments_Next,
     Arguments_StepIn,
     Arguments_StepOut,
+    Arguments_Continue,
     Arguments_Restart,
     Arguments_Disconnect,
     Arguments_Terminate,
@@ -151,6 +153,11 @@ Arguments_StepOut :: struct #packed {
     granularity: Maybe(SteppingGranularity) `json:"granularity,omitempty"`,
 }
 
+Arguments_Continue :: struct #packed {
+    threadId: number,
+    singleThread: Maybe(bool),
+}
+
 Arguments_Disconnect :: struct #packed {
     restart: Maybe(bool) `json:"restart,omitempty"`,
     terminateDebuggee: Maybe(bool) `json:"terminateDebuggee,omitempty"`,
@@ -158,7 +165,7 @@ Arguments_Disconnect :: struct #packed {
 }
 
 Arguments_Terminate :: struct #packed {
-    restart: Maybe(bool) `json:"omitempty"`,
+    restart: Maybe(bool) `json:"restart,omitempty"`,
 }
 
 /*
@@ -171,7 +178,7 @@ Response :: struct #packed {
 
     request_seq: number,
     success: bool,
-    command: Command,
+    command: string,
     message: Maybe(Message) `json:"message,omitempty"`,
 
     body: union {
@@ -181,6 +188,7 @@ Response :: struct #packed {
         Body_StackTrace,
         Body_Disassemble,
         Body_SetFunctionBreakpoints,
+        Body_Continue,
 
         Body_Ack,
     },
@@ -233,6 +241,10 @@ DisassembledInstruction :: struct #packed {
 
 Body_SetFunctionBreakpoints :: struct #packed {
     breakpoints: []Breakpoint,
+}
+
+Body_Continue :: struct #packed {
+    allThreadsContinued: Maybe(bool),
 }
 
 
