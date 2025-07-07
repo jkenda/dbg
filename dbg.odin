@@ -12,6 +12,8 @@ import "core:time"
 import "core:fmt"
 import "core:log"
 import "core:os"
+import "core:thread"
+import "core:sync"
 
 import "views"
 import "dap"
@@ -33,25 +35,40 @@ main :: proc() {
     views.init_data()
     defer views.delete_data()
 
-    state = .Initializing
-    dap_connection := init_debugger()
-    defer dap.disconnect(&dap_connection)
+    @(static)
+    mutex: sync.Atomic_Mutex
+
+    // run DAP in a background thread
+    dap_thread := thread.create_and_start(proc() {
+        state = .Initializing
+        conn := init_debugger()
+        defer dap.disconnect(&conn)
+
+        for state != .Exiting {
+            if sync.atomic_mutex_guard(&mutex) {
+                for handle_DAP_messages(&conn) {}
+                for state_transition(&conn) {}
+            }
+            time.sleep(1 * time.Millisecond)
+        }
+    })
 
     for state != .Exiting {
-        handle_DAP_messages(&dap_connection)
-        handle_key_presses()
-        state_transition(&dap_connection)
-
         if !platform.handle_events(platform_state) {
             state = .Exiting
         }
+        handle_key_presses()
 
         platform.before_show(&platform_state)
-        show_GUI(platform_state)
+        if sync.atomic_mutex_guard(&mutex) {
+            show_GUI(platform_state)
+        }
         platform.after_show(platform_state)
 
         free_all(context.temp_allocator)
     }
+
+    thread.join(dap_thread)
 
     { // save .ini file with custom data added
         io.WantSaveIniSettings = true
@@ -123,11 +140,11 @@ init_ImGui :: proc() -> ^im.IO {
     return io
 }
 
-handle_DAP_messages :: proc(conn: ^dap.Connection) {
+handle_DAP_messages :: proc(conn: ^dap.Connection) -> bool {
     for {
         arena: vmem.Arena
         msg, err := dap.read_message(&conn.(dap.Connection_Stdio), allocator = vmem.arena_allocator(&arena))
-        if err == .Empty_Input do break
+        if err == .Empty_Input do return false
 
         switch err {
         case nil:
@@ -358,6 +375,8 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
             state = .Error
         }
     }
+
+    return true
 }
 
 handle_key_presses :: proc() {
@@ -366,11 +385,13 @@ handle_key_presses :: proc() {
          if                im.IsKeyPressed(.F10) || im.IsKeyPressed(.N) do state = .SteppingOver
     else if                im.IsKeyPressed(.F11) || im.IsKeyPressed(.S) do state = .SteppingInto
     else if io.KeyShift && im.IsKeyPressed(.F11) || im.IsKeyPressed(.F) do state = .SteppingOut
-    else if                im.IsKeyPressed( .F5) || im.IsKeyPressed(.R) do state = .Running
+    else if                im.IsKeyPressed( .F5) || im.IsKeyPressed(.R) do state = .Starting
     else if io.KeyShift && im.IsKeyPressed( .F5)                        do state = .Resetting
 }
 
-state_transition :: proc(conn: ^dap.Connection) {
+state_transition :: proc(conn: ^dap.Connection) -> bool {
+    state_prev := state
+
     switch state {
     case .Initializing:
         show_exec_dialog = true
@@ -471,6 +492,8 @@ state_transition :: proc(conn: ^dap.Connection) {
     case .Error:
     case .Exiting:
     }
+
+    return state_prev != state
 }
 
 show_GUI :: proc(platform_state: platform.State) {

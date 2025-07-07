@@ -60,7 +60,6 @@ init :: proc() -> State {
 }
 
 before_show :: proc(using state: ^State) {
-
     io := imgui.GetIO()
 
     width, height := glfw.GetFramebufferSize(window)
