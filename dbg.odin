@@ -39,6 +39,7 @@ main :: proc() {
 
     for state != .Exiting {
         handle_DAP_messages(&dap_connection)
+        handle_key_presses()
         state_transition(&dap_connection)
 
         if !platform.handle_events(platform_state) {
@@ -357,6 +358,16 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) {
             state = .Error
         }
     }
+}
+
+handle_key_presses :: proc() {
+    io := im.GetIO()
+
+         if                im.IsKeyPressed(.F10) || im.IsKeyPressed(.N) do state = .SteppingOver
+    else if                im.IsKeyPressed(.F11) || im.IsKeyPressed(.S) do state = .SteppingInto
+    else if io.KeyShift && im.IsKeyPressed(.F11) || im.IsKeyPressed(.F) do state = .SteppingOut
+    else if                im.IsKeyPressed( .F5) || im.IsKeyPressed(.R) do state = .Running
+    else if io.KeyShift && im.IsKeyPressed( .F5)                        do state = .Resetting
 }
 
 state_transition :: proc(conn: ^dap.Connection) {
