@@ -46,16 +46,17 @@ main :: proc() {
 
         for state != .Exiting {
             if sync.atomic_mutex_guard(&mutex) {
-                for handle_DAP_messages(&conn) {}
-                for state_transition(&conn) {}
+                for handle_DAP_messages(&conn) || state_transition(&conn) {}
             }
-            time.sleep(1 * time.Millisecond)
+            time.sleep(10 * time.Millisecond)
+            sync.cpu_relax()
         }
     })
 
     for state != .Exiting {
         if !platform.handle_events(platform_state) {
             state = .Exiting
+            break
         }
         handle_key_presses()
 
@@ -94,7 +95,8 @@ init_debugger :: proc() -> dap.Connection {
 
         // wait for 'initialized' response
         for !debugger_initialized {
-            handle_DAP_messages(&conn)
+            for handle_DAP_messages(&conn) {}
+            time.sleep(1 * time.Millisecond)
         }
     }
 

@@ -234,7 +234,8 @@ write_message :: proc {
 @(private)
 read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.allocator) -> (str: string, err: Error) {
     if !sync {
-        if !(os2.pipe_has_data(conn.stdout) or_return) {
+        size := io.size(conn.stdout.stream) or_return
+        if size == 0 {
             err = .Empty_Input
             return
         }
@@ -242,7 +243,7 @@ read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.a
 
     // read "Content-Length: " and ensure its validity
     len_buf: [len(CONTENT_LENGTH)]u8
-    io.read(conn.stdout.stream, len_buf[:])
+    io.read_full(conn.stdout.stream, len_buf[:]) or_return
     assert(len_buf == CONTENT_LENGTH, fmt.aprintln(len_buf))
 
     // read until newline
@@ -258,7 +259,7 @@ read_text :: proc(conn: ^Connection_Stdio, sync := false, allocator := context.a
     buf := make([]u8, content_length, allocator)
 
     // skip the rest of the "\r\n\r\n" pattern
-    io.read(conn.stdout.stream, buf[:3])
+    io.read_full(conn.stdout.stream, buf[:3])
     assert(string(buf[:3]) == "\n\r\n")
 
     // read the message
