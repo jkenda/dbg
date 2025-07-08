@@ -16,16 +16,11 @@ show_threads_view :: proc(view_data: ^Runtime_View_Data) {
             for thread in d.threads {
                 im.TableNextRow()
 
-                {
-                    buf: [64]u8
-                    strconv.itoa(buf[:], int(thread.id))
-
-                    im.TableNextColumn()
-                    im.Text(cstring(raw_data(buf[:])))
-                }
+                im.TableNextColumn()
+                im.Text("%d", thread.id)
 
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(thread.name)))
+                im.Text("%s", thread.name)
             }
 
             im.EndTable()

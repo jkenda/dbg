@@ -19,7 +19,7 @@ show_breakpoints_view :: proc(view_data: ^Runtime_View_Data) {
                 im.TableNextRow()
 
                 im.TableNextColumn()
-                im.Text(strings.unsafe_string_to_cstring(bp.data.instructionReference.? or_else "[N/A]"))
+                im.Text("%s", bp.data.instructionReference.? or_else "[N/A]")
 
                 im.TableNextColumn()
                 switch line in bp.data.line {

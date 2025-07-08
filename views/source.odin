@@ -36,11 +36,11 @@ show_source_view :: proc(view_data: ^Runtime_View_Data) {
                     strconv.itoa(buf[:], lineno)
 
                     im.TableNextColumn()
-                    im.Text(cstring(raw_data(buf[:])))
+                    im.Text("%s", string(buf[:]))
                 }
 
                 im.TableNextColumn()
-                im.Text(strings.clone_to_cstring(line, context.temp_allocator))
+                im.Text("%s", strings.clone_to_cstring(line, context.temp_allocator))
 
                 lineno += 1
             }

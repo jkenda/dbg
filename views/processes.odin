@@ -18,22 +18,17 @@ show_processes_view :: proc(view_data: ^Runtime_View_Data) {
             for process in runtime_data.processes.data {
                 im.TableNextRow()
 
-                {
-                    buf: [64]u8
-                    switch pid in process.systemProcessId {
-                    case nil:
-                        text := "[N/A]"
-                        mem.copy(raw_data(buf[:]), raw_data(text), len(text))
-                    case dap.number:
-                        strconv.itoa(buf[:], int(pid))
-                    }
-
-                    im.TableNextColumn()
-                    im.Text(cstring(raw_data(buf[:])))
+                im.TableNextColumn()
+                switch pid in process.systemProcessId {
+                case nil:
+                    im.Text("[N/A]")
+                case dap.number:
+                    im.Text("%d", pid)
                 }
 
+
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(process.name)))
+                im.Text("%s", process.name)
 
                 im.TableNextColumn()
                 switch is_local in process.isLocalProcess {

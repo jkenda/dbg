@@ -36,7 +36,7 @@ main :: proc() {
     defer views.delete_data()
 
     @(static)
-    mutex: sync.Atomic_Mutex
+    mutex: sync.Mutex
 
     // run DAP in a background thread
     dap_thread := thread.create_and_start(proc() {
@@ -45,7 +45,7 @@ main :: proc() {
         defer dap.disconnect(&conn)
 
         for state != .Exiting {
-            if sync.atomic_mutex_guard(&mutex) {
+            if sync.guard(&mutex) {
                 for handle_DAP_messages(&conn) || state_transition(&conn) {}
             }
             time.sleep(10 * time.Millisecond)
@@ -61,7 +61,7 @@ main :: proc() {
         handle_key_presses()
 
         platform.before_show(&platform_state)
-        if sync.atomic_mutex_guard(&mutex) {
+        if sync.guard(&mutex) {
             show_GUI(platform_state)
         }
         platform.after_show(platform_state)
@@ -232,6 +232,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) -> bool {
                     body := m.body.(dap.Body_StackTrace)
                     view_data.data = body.stackFrames
 
+                    if len(body.stackFrames) == 0 { break }
                     stack_frame := body.stackFrames[0]
 
                     if source, ok := stack_frame.source.?; ok {
@@ -243,14 +244,20 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) -> bool {
                         }
                         view_data := &views.runtime_data.view_data[.Source][0]
                         view_data.first = true
+                        vmem.arena_destroy(&view_data.arena)
 
                         switch s in source.path {
                         case nil:
                             vmem.arena_destroy(&view_data.arena)
                             view_data.data = nil
                         case string:
-                            data := os.read_entire_file(s) or_else nil
-                            view_data.data = string(data)
+                            data, ok := os.read_entire_file(s)
+                            if ok {
+                                view_data.data = string(data)
+                            }
+                            else {
+                                view_data.data = nil
+                            }
                         }
                     }
 

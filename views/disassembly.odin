@@ -27,10 +27,10 @@ show_dasm_view :: proc(view_data: ^Runtime_View_Data) {
                 }
 
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(line.address)))
+                im.Text("%s", line.address)
 
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(line.instruction)))
+                im.Text("%s", line.instruction)
             }
 
             im.EndTable()

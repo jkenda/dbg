@@ -20,15 +20,15 @@ show_stack_view :: proc(view_data: ^Runtime_View_Data) {
                 im.TableNextRow()
 
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(frame.instructionPointerReference.? or_else "N/A")))
+                im.Text("%s", frame.instructionPointerReference.? or_else "N/A")
 
                 im.TableNextColumn()
-                im.Text(cstring(raw_data(frame.name)))
+                im.Text("%s", frame.name)
 
                 im.TableNextColumn()
                 {
                     context.allocator = context.temp_allocator
-                    im.Text(fmt.caprintf("{}:{}:{}",
+                    im.Text("%s", fmt.caprintf("{}:{}:{}",
                             frame.source != nil ? frame.source.(dap.Source).name.? or_else "" : "",
                             frame.line, frame.column))
                 }
