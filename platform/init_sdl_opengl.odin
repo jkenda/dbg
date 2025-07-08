@@ -43,9 +43,16 @@ destroy :: proc(using state: State) {
 }
 
 before_show :: proc(using state: ^State) {
-    imgui.NewFrame()
+   io := imgui.GetIO()
+
+    x, y: i32
+    sdl.GetWindowSize(window, &x, &y)
+    io.DisplaySize.x = f32(x)
+    io.DisplaySize.y = f32(y)
+
     imgui_impl_opengl3.NewFrame()
     imgui_impl_sdl2.NewFrame()
+    imgui.NewFrame()
 }
 
 after_show :: proc(using state: State) {

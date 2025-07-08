@@ -132,7 +132,7 @@ init_ImGui :: proc() -> ^im.IO {
     exec_path, ok := filepath.abs(os.args[0])
     assert(ok)
 
-    font_path := fmt.caprintf("{}/{}", filepath.dir(exec_path), "fonts/CONSOLA.ttf")
+    font_path := fmt.caprintf("{}/{}", filepath.dir(exec_path), "fonts/CONSOLA.TTF")
     log.info("loading font from", font_path)
 
     im.FontAtlas_AddFontFromFileTTF(io.Fonts, font_path, 14)
