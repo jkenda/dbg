@@ -35,8 +35,8 @@ main :: proc() {
     views.init_data()
     defer views.delete_data()
 
-    @(static)
-    mutex: sync.Mutex
+    @(static) sema: sync.Sema
+    @(static) mutex: sync.Mutex
 
     // run DAP in a background thread
     dap_thread := thread.create_and_start(proc() {
@@ -45,20 +45,24 @@ main :: proc() {
         defer dap.disconnect(&conn)
 
         for state != .Exiting {
+            sync.wait_with_timeout(&sema, 2 * time.Millisecond)
+            sync.cpu_relax()
             if sync.guard(&mutex) {
                 for handle_DAP_messages(&conn) || state_transition(&conn) {}
             }
-            time.sleep(10 * time.Millisecond)
-            sync.cpu_relax()
         }
     })
+
+    // TODO: read debugger output synchronously
 
     for state != .Exiting {
         if !platform.handle_events(platform_state) {
             state = .Exiting
             break
         }
-        handle_key_presses()
+        if handle_key_presses() {
+            sync.post(&sema)
+        }
 
         platform.before_show(&platform_state)
         if sync.guard(&mutex) {
@@ -81,6 +85,10 @@ main :: proc() {
     }
 }
 
+DAP_once :: proc(conn: ^dap.Connection) {
+    return
+}
+
 init_debugger :: proc() -> dap.Connection {
     // start DAP connection
     conn, err := dap.connect()
@@ -96,7 +104,7 @@ init_debugger :: proc() -> dap.Connection {
         // wait for 'initialized' response
         for !debugger_initialized {
             for handle_DAP_messages(&conn) {}
-            time.sleep(1 * time.Millisecond)
+            sync.cpu_relax()
         }
     }
 
@@ -146,7 +154,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) -> bool {
     for {
         arena: vmem.Arena
         msg, err := dap.read_message(&conn.(dap.Connection_Stdio), allocator = vmem.arena_allocator(&arena))
-        if err == .Empty_Input do return false
+        if err == .Empty_Input { return false }
 
         switch err {
         case nil:
@@ -388,7 +396,7 @@ handle_DAP_messages :: proc(conn: ^dap.Connection) -> bool {
     return true
 }
 
-handle_key_presses :: proc() {
+handle_key_presses :: proc() -> bool {
     io := im.GetIO()
 
          if                im.IsKeyPressed(.F10) || im.IsKeyPressed(.N) do state = .SteppingOver
@@ -396,6 +404,8 @@ handle_key_presses :: proc() {
     else if io.KeyShift && im.IsKeyPressed(.F11) || im.IsKeyPressed(.F) do state = .SteppingOut
     else if                im.IsKeyPressed( .F5) || im.IsKeyPressed(.R) do state = .Starting
     else if io.KeyShift && im.IsKeyPressed( .F5)                        do state = .Resetting
+
+    return state != .Waiting
 }
 
 state_transition :: proc(conn: ^dap.Connection) -> bool {
